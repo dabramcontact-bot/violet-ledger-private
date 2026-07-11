@@ -18,10 +18,15 @@ const EMPTY = {
   request_number: '', category: '', product_name: '', agent_name: '', request_sent_at: '',
   offer_received: false, offer_received_at: '', included_calculation: false,
   pi_sent: false, pi_sent_at: '', pi_revision: false, pi_revision_at: '',
-  pi_signed: false, pi_signed_at: '', notes: ''
+  pi_signed: false, pi_signed_at: '', notes: '',
+  shipment_status: 'not_shipped', logistics_company: '', transit_started_at: '',
+  expected_warehouse_at: '', warehouse_arrived_at: ''
 }
 
-const DATE_FIELDS = ['request_sent_at', 'offer_received_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at']
+const DATE_FIELDS = [
+  'request_sent_at', 'offer_received_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at',
+  'transit_started_at', 'expected_warehouse_at', 'warehouse_arrived_at'
+]
 const roleLabel = { admin: 'Администратор', editor: 'Просмотр', viewer: 'Просмотр' }
 const statusMeta = {
   request: ['Запрос отправлен', '01'],
@@ -30,6 +35,12 @@ const statusMeta = {
   pi_sent: ['PI отправлена', '04'],
   revision: ['PI на доработке', '05'],
   signed: ['PI подписана', '06']
+}
+
+const shipmentMeta = {
+  not_shipped: ['Ожидает отправки', 'waiting'],
+  in_transit: ['В пути', 'transit'],
+  arrived: ['На складе', 'arrived']
 }
 
 function calcStatus(row) {
@@ -43,7 +54,7 @@ function calcStatus(row) {
 
 function cleanRequest(form, userId) {
   const payload = { ...form, updated_by: userId }
-  ;['request_number', 'category', 'product_name', 'agent_name', 'notes'].forEach(key => {
+  ;['request_number', 'category', 'product_name', 'agent_name', 'notes', 'logistics_company'].forEach(key => {
     payload[key] = String(payload[key] || '').trim()
   })
   DATE_FIELDS.forEach(key => { payload[key] = payload[key] || null })
@@ -51,6 +62,13 @@ function cleanRequest(form, userId) {
   if (!payload.pi_sent) payload.pi_sent_at = null
   if (!payload.pi_revision) payload.pi_revision_at = null
   if (!payload.pi_signed) payload.pi_signed_at = null
+  if (payload.warehouse_arrived_at) payload.shipment_status = 'arrived'
+  if (payload.shipment_status === 'not_shipped') {
+    payload.transit_started_at = null
+    payload.expected_warehouse_at = null
+    payload.warehouse_arrived_at = null
+  }
+  if (payload.shipment_status === 'in_transit') payload.warehouse_arrived_at = null
   payload.status = calcStatus(payload)
   delete payload.id
   delete payload.created_at
@@ -156,6 +174,7 @@ function Sidebar({ page, setPage, profile, open, setOpen }) {
   const items = [
     ['dashboard', LayoutDashboard, 'Центр управления'],
     ['analytics', BarChart3, 'Агенты и категории'],
+    ['logistics', Truck, 'Логистика и склад'],
     ['requests', ClipboardList, 'Реестр запросов'],
     ['audit', Activity, 'Журнал действий']
   ]
@@ -185,9 +204,14 @@ function StatusPill({ status }) {
   return <span className={`status ${status}`}><i>{index}</i>{label}</span>
 }
 
+function ShipmentPill({ status }) {
+  const [label, tone] = shipmentMeta[status] || shipmentMeta.not_shipped
+  return <span className={`shipment-pill ${tone}`}><i/>{label}</span>
+}
+
 function ProcurementRoute({ rows }) {
-  const signed = rows.filter(row => row.pi_signed).length
-  const active = rows.length - signed
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
+  const arrived = rows.filter(row => row.shipment_status === 'arrived').length
   return <section className="panel route-panel">
     <div className="panel-head"><div><span className="panel-tag">LOGISTICS / LIVE ROUTE</span><h2>Китай → агент → логистика → склад</h2><p>Операционный маршрут закупки и документов PI</p></div><Route size={20}/></div>
     <div className="route-track">
@@ -195,9 +219,9 @@ function ProcurementRoute({ rows }) {
       <div className="route-connector"><i/><span>RFQ</span></div>
       <div className="route-node"><div className="route-icon"><ShoppingCart/></div><span>02 / AGENT</span><b>Китайский агент</b><small>{new Set(rows.map(row => row.agent_name)).size} поставщиков</small></div>
       <div className="route-connector"><i/><span>PI</span></div>
-      <div className="route-node"><div className="route-icon"><Ship/></div><span>03 / TRANSIT</span><b>Логистика</b><small>{active} в работе</small></div>
+      <div className="route-node"><div className="route-icon"><Ship/></div><span>03 / TRANSIT</span><b>Логистика</b><small>{inTransit} в пути</small></div>
       <div className="route-connector"><i/><span>FREIGHT</span></div>
-      <div className="route-node"><div className="route-icon"><Warehouse/></div><span>04 / STOCK</span><b>Склад</b><small>{signed} завершено</small></div>
+      <div className="route-node"><div className="route-icon"><Warehouse/></div><span>04 / STOCK</span><b>Склад</b><small>{arrived} принято</small></div>
     </div>
   </section>
 }
@@ -215,7 +239,7 @@ function MiniCategories({ rows }) {
 
 function Dashboard({ rows, onAdd, canEdit, setOpen }) {
   const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, pi_sent: 0, revision: 0, signed: 0 }), [rows])
-  const active = rows.filter(row => calcStatus(row) !== 'signed').length
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const supplierCount = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
 
   return <>
@@ -224,7 +248,7 @@ function Dashboard({ rows, onAdd, canEdit, setOpen }) {
     <section className="stats-grid">
       <Stat icon={Package} label="Товаров" value={rows.length} note="Всего запросов" index="01"/>
       <Stat icon={Factory} label="Агентов" value={supplierCount} note="Китайские поставщики" index="02"/>
-      <Stat icon={Truck} label="В работе" value={active} note="Активная закупка" index="03"/>
+      <Stat icon={Truck} label="В пути" value={inTransit} note="Товары в перевозке" index="03"/>
       <Stat icon={FileCheck2} label="PI подписано" value={counts.signed} note="Завершённые сделки" index="04"/>
     </section>
     <ProcurementRoute rows={rows}/>
@@ -235,11 +259,12 @@ function Dashboard({ rows, onAdd, canEdit, setOpen }) {
 
 function RequestTable({ rows, onEdit, onDelete, canEdit, compact = false }) {
   if (!rows.length) return <div className="empty"><PackageOpen size={34}/><b>Запросов пока нет</b><span>Администратор может добавить первую товарную позицию.</span></div>
-  return <div className="table-wrap"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>
+  return <div className="table-wrap"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>
     <td><b className="request-no">{row.request_number}</b></td>
     <td><b>{row.product_name}</b><small>{row.category}</small></td>
     <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
     <td>{formatDate(row.request_sent_at)}</td>
+    <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
     <td><StatusPill status={calcStatus(row)}/></td>
     {!compact && <td><div className="row-actions">{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> read_only</span>}</div></td>}
   </tr>)}</tbody></table></div>
@@ -278,6 +303,65 @@ function Analytics({ rows, setOpen }) {
   </>
 }
 
+function Logistics({ rows, onEdit, canEdit, setOpen }) {
+  const [filter, setFilter] = useState('all')
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit')
+  const arrived = rows.filter(row => row.shipment_status === 'arrived')
+  const waiting = rows.filter(row => !row.shipment_status || row.shipment_status === 'not_shipped')
+  const companies = new Set(rows.map(row => row.logistics_company).filter(Boolean))
+  const filtered = filter === 'all' ? rows : rows.filter(row => (row.shipment_status || 'not_shipped') === filter)
+
+  return <>
+    <Header title="Управление логистикой" subtitle="Что уже в пути, у какой компании и когда товар поступил на склад." setOpen={setOpen} code="mission-logistics"/>
+    {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Статус перевозки изменяет только администратор.</div>}
+    <section className="stats-grid logistics-stats">
+      <Stat icon={Package} label="Ожидает" value={waiting.length} note="Ещё не отправлено" index="01"/>
+      <Stat icon={Ship} label="В пути" value={inTransit.length} note="Активные перевозки" index="02"/>
+      <Stat icon={Warehouse} label="На складе" value={arrived.length} note="Фактически принято" index="03"/>
+      <Stat icon={Truck} label="Компаний" value={companies.size} note="Логистические партнёры" index="04"/>
+    </section>
+    <section className="panel mission-panel">
+      <div className="panel-head"><div><span className="panel-tag">LIVE SHIPMENT CONTROL</span><h2>Маршрут поставок</h2><p>Оперативное состояние каждой товарной позиции</p></div><MapPinned size={20}/></div>
+      <div className="mission-orbit"><div><Factory/><span>КИТАЙ / CN</span></div><i/><div className="signal-node"><Ship/><span>{inTransit.length} В ПУТИ</span></div><i/><div><Warehouse/><span>СКЛАД / BY</span></div></div>
+    </section>
+    <section className="panel logistics-table-panel">
+      <div className="toolbar"><div className="filter"><Filter size={16}/><select value={filter} onChange={event => setFilter(event.target.value)}><option value="all">Все перевозки</option><option value="not_shipped">Ожидает отправки</option><option value="in_transit">В пути</option><option value="arrived">На складе</option></select></div></div>
+      {filtered.length ? <div className="table-wrap"><table><thead><tr><th>Товар</th><th>Китайский агент</th><th>Статус</th><th>Логистическая компания</th><th>В пути с</th><th>План склада</th><th>Прибыл на склад</th><th>Управление</th></tr></thead><tbody>{filtered.map(row => <tr key={row.id}><td><b>{row.product_name}</b><small>{row.request_number} · {row.category}</small></td><td>{row.agent_name}</td><td><ShipmentPill status={row.shipment_status}/></td><td>{row.logistics_company || '—'}</td><td>{formatDate(row.transit_started_at)}</td><td>{formatDate(row.expected_warehouse_at)}</td><td>{formatDate(row.warehouse_arrived_at)}</td><td>{canEdit ? <button className="inline-edit" onClick={() => onEdit(row)}><Pencil size={14}/> Изменить</button> : <span className="locked-action"><ShieldCheck size={14}/> read_only</span>}</td></tr>)}</tbody></table></div> : <div className="empty"><Ship/><b>Нет перевозок с таким статусом</b></div>}
+    </section>
+  </>
+}
+
+function LogisticsModal({ value, onClose, onSave }) {
+  const [form, setForm] = useState(value)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const set = (key, nextValue) => setForm(current => ({ ...current, [key]: nextValue }))
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await onSave(form)
+    } catch (saveError) {
+      setError(saveError.message)
+      setBusy(false)
+    }
+  }
+
+  return <div className="modal-backdrop"><div className="modal logistics-modal"><div className="modal-head"><div><div className="terminal-line">mission/logistics/update</div><div className="eyebrow">УПРАВЛЕНИЕ ПЕРЕВОЗКОЙ</div><h2>{form.product_name}</h2><p>{form.request_number} · {form.agent_name}</p></div><button onClick={onClose}><X/></button></div><form onSubmit={submit}>
+    <div className="shipment-visual"><Factory/><i/><Ship/><i/><Warehouse/></div>
+    <div className="form-grid">
+      <label>Статус перевозки *<select required value={form.shipment_status || 'not_shipped'} onChange={event => set('shipment_status', event.target.value)}><option value="not_shipped">Ожидает отправки</option><option value="in_transit">В пути</option><option value="arrived">На складе</option></select></label>
+      <label>Логистическая компания {form.shipment_status !== 'not_shipped' && '*'}<input required={form.shipment_status !== 'not_shipped'} value={form.logistics_company || ''} onChange={event => set('logistics_company', event.target.value)} placeholder="Например, China Cargo"/></label>
+      {form.shipment_status !== 'not_shipped' && <><label>Дата отправки в путь *<input required type="date" value={form.transit_started_at || ''} onChange={event => set('transit_started_at', event.target.value)}/></label><label>Плановая дата склада<input type="date" value={form.expected_warehouse_at || ''} onChange={event => set('expected_warehouse_at', event.target.value)}/></label></>}
+      {form.shipment_status === 'arrived' && <label className="full">Фактическая дата поступления на склад *<input required type="date" value={form.warehouse_arrived_at || ''} onChange={event => set('warehouse_arrived_at', event.target.value)}/></label>}
+    </div>
+    {error && <div className="form-error"><CircleAlert size={17}/><div><b>Логистика не обновлена</b><span>{error}</span></div></div>}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Отмена</button><button className="primary" disabled={busy}>{busy ? 'Сохранение…' : 'Сохранить логистику'}</button></div>
+  </form></div></div>
+}
+
 function RequestModal({ value, onClose, onSave }) {
   const [form, setForm] = useState(value || EMPTY)
   const [busy, setBusy] = useState(false)
@@ -306,6 +390,13 @@ function RequestModal({ value, onClose, onSave }) {
   return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><div><div className="terminal-line">~/requests/edit <span>_</span></div><div className="eyebrow">КАРТОЧКА ЗАПРОСА</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2></div><button onClick={onClose}><X/></button></div><form onSubmit={submit}>
     <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<input required value={form.agent_name} onChange={event => set('agent_name', event.target.value)} placeholder="Имя или компания"/></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
     <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
+    <div className="stage-title"><span>ЛОГИСТИКА</span><small>CHINA → TRANSIT → WAREHOUSE</small></div>
+    <div className="form-grid logistics-form-grid">
+      <label>Статус перевозки<select value={form.shipment_status || 'not_shipped'} onChange={event => set('shipment_status', event.target.value)}><option value="not_shipped">Ожидает отправки</option><option value="in_transit">В пути</option><option value="arrived">На складе</option></select></label>
+      <label>Логистическая компания<input value={form.logistics_company || ''} onChange={event => set('logistics_company', event.target.value)} placeholder="Название перевозчика"/></label>
+      {form.shipment_status !== 'not_shipped' && <><label>Дата отправки в путь<input type="date" value={form.transit_started_at || ''} onChange={event => set('transit_started_at', event.target.value)}/></label><label>Плановая дата склада<input type="date" value={form.expected_warehouse_at || ''} onChange={event => set('expected_warehouse_at', event.target.value)}/></label></>}
+      {form.shipment_status === 'arrived' && <label className="full">Фактическая дата поступления на склад *<input required type="date" value={form.warehouse_arrived_at || ''} onChange={event => set('warehouse_arrived_at', event.target.value)}/></label>}
+    </div>
     <label>Комментарий<textarea rows="3" value={form.notes || ''} onChange={event => set('notes', event.target.value)} placeholder="Условия, замечания, следующий шаг…"/></label>
     {error && <div className="form-error"><CircleAlert size={17}/><div><b>Запрос не сохранён</b><span>{error}</span></div></div>}
     <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>ОТМЕНА</button><button className="primary" disabled={busy}>{busy ? 'СОХРАНЕНИЕ…' : 'СОХРАНИТЬ →'}</button></div>
@@ -371,6 +462,7 @@ function App() {
   const [rows, setRows] = useState([])
   const [page, setPage] = useState('dashboard')
   const [modal, setModal] = useState(null)
+  const [logisticsModal, setLogisticsModal] = useState(null)
   const [sideOpen, setSideOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [dataError, setDataError] = useState('')
@@ -409,6 +501,7 @@ function App() {
       : await supabase.from('requests').insert({ ...payload, created_by: session.user.id }).select('id').single()
     if (result.error) throw new Error(friendlyError(result.error))
     setModal(null)
+    setLogisticsModal(null)
     await loadRows()
   }
 
@@ -425,7 +518,7 @@ function App() {
   if (!profile) return <div className="access-denied"><ShieldCheck size={40}/><h2>Проверяем доступ</h2><p>{dataError || 'Если экран не меняется, ваш email ещё не добавлен администратором.'}</p><button className="secondary" onClick={() => supabase.auth.signOut()}>ВЫЙТИ</button></div>
 
   const canEdit = profile.role === 'admin'
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>}</div>
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
