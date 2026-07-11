@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createClient } from '@supabase/supabase-js'
 import {
-  Activity, Archive, ArrowRight, BarChart3, Check, ChevronRight, CircleAlert,
-  ClipboardList, Clock3, FileCheck2, FilePenLine, Filter, LayoutDashboard,
-  LogOut, Mail, Menu, PackageOpen, Pencil, Plus, Search, Send, ShieldCheck,
-  Trash2, UserPlus, Users, X
+  Activity, Archive, ArrowRight, BarChart3, Boxes, Check, ChevronRight,
+  CircleAlert, ClipboardList, Clock3, Container, Factory, FileCheck2,
+  FilePenLine, Filter, Globe2, LayoutDashboard, LogOut, Mail, MapPinned,
+  Menu, Package, PackageOpen, Pencil, Plus, Route, Search, Ship,
+  ShieldCheck, ShoppingCart, Trash2, Truck, UserPlus, Users, Warehouse, X
 } from 'lucide-react'
 import './styles.css'
 
@@ -20,24 +21,88 @@ const EMPTY = {
   pi_signed: false, pi_signed_at: '', notes: ''
 }
 
-const roleLabel = { admin: 'Администратор', editor: 'Редактор', viewer: 'Просмотр' }
+const DATE_FIELDS = ['request_sent_at', 'offer_received_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at']
+const roleLabel = { admin: 'Администратор', editor: 'Просмотр', viewer: 'Просмотр' }
 const statusMeta = {
-  request: ['Запрос отправлен', 'blue'], offer: ['Предложение получено', 'cyan'],
-  calculation: ['В расчёте', 'violet'], pi_sent: ['PI отправлена', 'orange'],
-  revision: ['PI на доработке', 'rose'], signed: ['PI подписана', 'green']
+  request: ['Запрос отправлен', '01'],
+  offer: ['Предложение получено', '02'],
+  calculation: ['В расчёте', '03'],
+  pi_sent: ['PI отправлена', '04'],
+  revision: ['PI на доработке', '05'],
+  signed: ['PI подписана', '06']
 }
 
-function calcStatus(r) {
-  if (r.pi_signed) return 'signed'
-  if (r.pi_revision) return 'revision'
-  if (r.pi_sent) return 'pi_sent'
-  if (r.included_calculation) return 'calculation'
-  if (r.offer_received) return 'offer'
+function calcStatus(row) {
+  if (row.pi_signed) return 'signed'
+  if (row.pi_revision) return 'revision'
+  if (row.pi_sent) return 'pi_sent'
+  if (row.included_calculation) return 'calculation'
+  if (row.offer_received) return 'offer'
   return 'request'
 }
 
-const date = (value) => value ? new Intl.DateTimeFormat('ru-RU').format(new Date(`${value}T00:00:00`)) : '—'
-const dateTime = (value) => value ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value)) : '—'
+function cleanRequest(form, userId) {
+  const payload = { ...form, updated_by: userId }
+  ;['request_number', 'category', 'product_name', 'agent_name', 'notes'].forEach(key => {
+    payload[key] = String(payload[key] || '').trim()
+  })
+  DATE_FIELDS.forEach(key => { payload[key] = payload[key] || null })
+  if (!payload.offer_received) payload.offer_received_at = null
+  if (!payload.pi_sent) payload.pi_sent_at = null
+  if (!payload.pi_revision) payload.pi_revision_at = null
+  if (!payload.pi_signed) payload.pi_signed_at = null
+  payload.status = calcStatus(payload)
+  delete payload.id
+  delete payload.created_at
+  delete payload.updated_at
+  delete payload.created_by
+  return payload
+}
+
+function friendlyError(error) {
+  if (!error) return 'Неизвестная ошибка'
+  if (error.code === '23505') return 'Такой номер запроса уже существует.'
+  if (error.code === '42501') return 'Недостаточно прав. Изменения может вносить только администратор.'
+  if (/invalid input syntax for type date/i.test(error.message || '')) return 'Проверьте заполнение дат.'
+  return error.message || 'Не удалось сохранить изменения.'
+}
+
+const formatDate = value => value
+  ? new Intl.DateTimeFormat('ru-RU').format(new Date(`${value}T00:00:00`))
+  : '—'
+
+const formatDateTime = value => value
+  ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value))
+  : '—'
+
+function buildAnalytics(rows) {
+  const supplierMap = new Map()
+  const categoryMap = new Map()
+
+  rows.forEach(row => {
+    const supplier = row.agent_name || 'Без агента'
+    const category = row.category || 'Без категории'
+    if (!supplierMap.has(supplier)) supplierMap.set(supplier, { name: supplier, total: 0, signed: 0, revision: 0, categories: new Set() })
+    const supplierItem = supplierMap.get(supplier)
+    supplierItem.total += 1
+    supplierItem.categories.add(category)
+    if (row.pi_signed) supplierItem.signed += 1
+    if (row.pi_revision) supplierItem.revision += 1
+
+    if (!categoryMap.has(category)) categoryMap.set(category, { name: category, total: 0, suppliers: new Set() })
+    const categoryItem = categoryMap.get(category)
+    categoryItem.total += 1
+    categoryItem.suppliers.add(supplier)
+  })
+
+  const suppliers = [...supplierMap.values()]
+    .map(item => ({ ...item, categoriesCount: item.categories.size, categoriesText: [...item.categories].join(', ') }))
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  const categories = [...categoryMap.values()]
+    .map(item => ({ ...item, suppliersCount: item.suppliers.size }))
+    .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name))
+  return { suppliers, categories }
+}
 
 function Login() {
   const [mode, setMode] = useState('login')
@@ -46,133 +111,321 @@ function Login() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
 
-  async function submit(e) {
-    e.preventDefault(); setBusy(true); setMessage('')
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setMessage('')
     const result = mode === 'login'
       ? await supabase.auth.signInWithPassword({ email, password })
-      : await supabase.auth.signUp({ email, password })
-    if (result.error) setMessage(result.error.message === 'Invalid login credentials' ? 'Неверный email или пароль' : result.error.message)
-    else if (mode === 'signup' && !result.data.session) setMessage('Проверьте почту и подтвердите регистрацию.')
+      : await supabase.auth.signUp({
+          email,
+          password,
+          options: { emailRedirectTo: `${window.location.origin}${import.meta.env.BASE_URL}` }
+        })
+    if (result.error) {
+      setMessage(result.error.message === 'Invalid login credentials' ? 'Неверный email или пароль' : result.error.message)
+    } else if (mode === 'signup' && !result.data.session) {
+      setMessage('Проверьте почту и подтвердите регистрацию.')
+    }
     setBusy(false)
   }
 
   return <div className="login-page">
-    <div className="login-glow one"/><div className="login-glow two"/>
-    <div className="login-brand"><div className="logo"><span>V</span></div><b>Violet Ledger</b></div>
-    <main className="login-card">
+    <div className="arrow-field" aria-hidden="true">{Array.from({ length: 12 }, (_, i) => <span key={i}>{'>' .repeat(10 + i)}</span>)}</div>
+    <div className="login-brand"><div className="logo">VL</div><div><b>VIOLET LEDGER</b><small>CHINA PROCUREMENT OS</small></div></div>
+    <main className="login-card terminal-card">
+      <div className="terminal-line">~/procurement/auth <span>_</span></div>
       <div className="eyebrow"><ShieldCheck size={15}/> ЗАЩИЩЁННОЕ ПРОСТРАНСТВО</div>
-      <h1>{mode === 'login' ? 'С возвращением' : 'Создать аккаунт'}</h1>
-      <p>{mode === 'login' ? 'Войдите, чтобы продолжить работу с запросами и PI.' : 'Регистрация доступна только по приглашению администратора.'}</p>
+      <h1>{mode === 'login' ? 'Вход в систему' : 'Новый аккаунт'}</h1>
+      <p>{mode === 'login' ? 'Контроль товаров, агентов, логистики и PI.' : 'Регистрация доступна только для приглашённых пользователей.'}</p>
       <form onSubmit={submit}>
-        <label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="name@company.com"/></label>
-        <label>Пароль<input type="password" required minLength="8" value={password} onChange={e=>setPassword(e.target.value)} placeholder="Не менее 8 символов"/></label>
-        {message && <div className="auth-message"><CircleAlert size={17}/>{message}</div>}
-        <button className="primary wide" disabled={busy}>{busy ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}<ArrowRight size={18}/></button>
+        <label>Email<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="name@company.com"/></label>
+        <label>Пароль<input type="password" required minLength="8" value={password} onChange={event => setPassword(event.target.value)} placeholder="Не менее 8 символов"/></label>
+        {message && <div className="auth-message"><CircleAlert size={16}/>{message}</div>}
+        <button className="primary wide" disabled={busy}>{busy ? 'ПОДОЖДИТЕ…' : mode === 'login' ? 'ВОЙТИ →' : 'СОЗДАТЬ АККАУНТ →'}</button>
       </form>
-      <button className="link-button" onClick={()=>{setMode(mode==='login'?'signup':'login');setMessage('')}}>
-        {mode === 'login' ? 'Получили приглашение? Создать аккаунт' : 'Уже есть аккаунт? Войти'}
+      <button className="link-button" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage('') }}>
+        {mode === 'login' ? 'Получили приглашение? Создать аккаунт →' : 'Уже есть аккаунт? Войти →'}
       </button>
     </main>
-    <div className="login-note">Доступ только для приглашённых пользователей</div>
+    <div className="login-route"><Factory/><span>中国</span><i/><Ship/><i/><Warehouse/><span>СКЛАД</span></div>
   </div>
 }
 
 function Sidebar({ page, setPage, profile, open, setOpen }) {
   const items = [
-    ['dashboard', LayoutDashboard, 'Обзор'], ['requests', ClipboardList, 'Реестр запросов'],
+    ['dashboard', LayoutDashboard, 'Центр управления'],
+    ['analytics', BarChart3, 'Агенты и категории'],
+    ['requests', ClipboardList, 'Реестр запросов'],
     ['audit', Activity, 'Журнал действий']
   ]
-  if (profile?.role === 'admin') items.push(['users', Users, 'Пользователи'])
-  return <><div className={`mobile-overlay ${open?'show':''}`} onClick={()=>setOpen(false)}/><aside className={open?'open':''}>
-    <div className="brand"><div className="logo"><span>V</span></div><div><b>Violet Ledger</b><small>PROCUREMENT OS</small></div><button className="close-mobile" onClick={()=>setOpen(false)}><X/></button></div>
-    <nav>{items.map(([id, Icon, label])=><button key={id} className={page===id?'active':''} onClick={()=>{setPage(id);setOpen(false)}}><Icon size={19}/><span>{label}</span>{page===id&&<ChevronRight size={16}/>}</button>)}</nav>
-    <div className="side-footer"><div className="avatar">{profile?.email?.[0]?.toUpperCase()}</div><div><b>{profile?.email}</b><small>{roleLabel[profile?.role]}</small></div><button title="Выйти" onClick={()=>supabase.auth.signOut()}><LogOut size={18}/></button></div>
-  </aside></>
-}
+  if (profile?.role === 'admin') items.push(['users', Users, 'Доступ и роли'])
 
-function Header({ title, subtitle, onAdd, canEdit, setOpen }) {
-  return <header><button className="menu" onClick={()=>setOpen(true)}><Menu/></button><div><h1>{title}</h1><p>{subtitle}</p></div>{onAdd&&canEdit&&<button className="primary" onClick={onAdd}><Plus size={18}/>Новый запрос</button>}</header>
-}
-
-function Stat({ icon: Icon, label, value, tone, note }) {
-  return <div className="stat"><div className={`stat-icon ${tone}`}><Icon size={20}/></div><div><span>{label}</span><strong>{value}</strong><small>{note}</small></div></div>
-}
-
-function StatusPill({ status }) { const [label,tone]=statusMeta[status]||statusMeta.request; return <span className={`status ${tone}`}><i/>{label}</span> }
-
-function Dashboard({ rows, onAdd, canEdit, setOpen }) {
-  const counts = useMemo(()=>rows.reduce((a,r)=>{a[calcStatus(r)]++;return a},{request:0,offer:0,calculation:0,pi_sent:0,revision:0,signed:0}),[rows])
-  const active = rows.filter(r=>calcStatus(r)!=='signed').length
   return <>
-    <Header title="Добрый вечер" subtitle="Все закупочные процессы — в одном спокойном пространстве." onAdd={onAdd} canEdit={canEdit} setOpen={setOpen}/>
-    <section className="stats-grid">
-      <Stat icon={ClipboardList} label="Всего запросов" value={rows.length} tone="violet" note="За всё время"/>
-      <Stat icon={Clock3} label="В работе" value={active} tone="blue" note="Требуют внимания"/>
-      <Stat icon={FilePenLine} label="PI на доработке" value={counts.revision} tone="rose" note="Приоритетный этап"/>
-      <Stat icon={FileCheck2} label="PI подписано" value={counts.signed} tone="green" note="Завершено"/>
-    </section>
-    <section className="panel pipeline-panel"><div className="panel-head"><div><h2>Воронка закупок</h2><p>Распределение запросов по текущему этапу</p></div></div>
-      <div className="pipeline">{Object.entries(statusMeta).map(([key,[label,tone]],i)=><div className="pipe-step" key={key}><div className={`pipe-circle ${tone}`}>{counts[key]}</div><b>{label}</b><span>{rows.length ? Math.round(counts[key]/rows.length*100) : 0}%</span>{i<5&&<div className="pipe-line"/>}</div>)}</div>
-    </section>
-    <section className="panel"><div className="panel-head"><div><h2>Последние запросы</h2><p>Недавно обновлённые позиции</p></div></div><RequestTable rows={rows.slice(0,6)} compact/></section>
+    <div className={`mobile-overlay ${open ? 'show' : ''}`} onClick={() => setOpen(false)}/>
+    <aside className={open ? 'open' : ''}>
+      <div className="brand"><div className="logo">VL</div><div><b>VIOLET LEDGER</b><small>CHINA PROCUREMENT OS</small></div><button className="close-mobile" onClick={() => setOpen(false)}><X/></button></div>
+      <div className="side-route"><span>CN</span><i/><span>BY</span></div>
+      <nav>{items.map(([id, Icon, label], index) => <button key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setOpen(false) }}><span className="nav-index">0{index + 1}</span><Icon size={17}/><span>{label}</span>{page === id && <ChevronRight size={15}/>}</button>)}</nav>
+      <div className="side-footer"><div className="avatar">{profile?.email?.[0]?.toUpperCase()}</div><div><b>{profile?.email}</b><small>{roleLabel[profile?.role]}</small></div><button title="Выйти" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button></div>
+    </aside>
   </>
 }
 
-function RequestTable({ rows, onEdit, onDelete, canEdit, compact=false }) {
-  if (!rows.length) return <div className="empty"><PackageOpen size={38}/><b>Запросов пока нет</b><span>Добавьте первую позицию, чтобы начать работу.</span></div>
-  return <div className="table-wrap"><table><thead><tr><th>Запрос</th><th>Товар и категория</th><th>Агент</th><th>Отправлен</th><th>Текущий этап</th>{!compact&&<th/>}</tr></thead><tbody>{rows.map(r=><tr key={r.id}>
-    <td><b className="request-no">{r.request_number}</b></td><td><b>{r.product_name}</b><small>{r.category}</small></td><td>{r.agent_name}</td><td>{date(r.request_sent_at)}</td><td><StatusPill status={calcStatus(r)}/></td>{!compact&&<td><div className="row-actions">{canEdit&&<><button onClick={()=>onEdit(r)}><Pencil size={16}/></button><button className="danger" onClick={()=>onDelete(r)}><Trash2 size={16}/></button></>}</div></td>}
+function Header({ title, subtitle, onAdd, canEdit, setOpen, code = 'PROC' }) {
+  return <header><button className="menu" onClick={() => setOpen(true)}><Menu/></button><div><div className="page-code">~/{code.toLowerCase()}</div><h1>{title}</h1><p>{subtitle}</p></div>{onAdd && canEdit && <button className="primary" onClick={onAdd}><Plus size={17}/> НОВЫЙ ЗАПРОС →</button>}</header>
+}
+
+function Stat({ icon: Icon, label, value, note, index }) {
+  return <div className="stat"><div className="stat-top"><span>METRIC_{index}</span><Icon size={18}/></div><strong>{String(value).padStart(2, '0')}</strong><b>{label}</b><small>{note}</small><div className="log-bars">{[3,7,4,9,5,8,6,10,4,7,9,5].map((height, i) => <i key={i} style={{ height: `${height * 2}px` }}/>)}</div></div>
+}
+
+function StatusPill({ status }) {
+  const [label, index] = statusMeta[status] || statusMeta.request
+  return <span className={`status ${status}`}><i>{index}</i>{label}</span>
+}
+
+function ProcurementRoute({ rows }) {
+  const signed = rows.filter(row => row.pi_signed).length
+  const active = rows.length - signed
+  return <section className="panel route-panel">
+    <div className="panel-head"><div><span className="panel-tag">LOGISTICS / LIVE ROUTE</span><h2>Китай → агент → логистика → склад</h2><p>Операционный маршрут закупки и документов PI</p></div><Route size={20}/></div>
+    <div className="route-track">
+      <div className="route-node"><div className="route-icon"><Factory/></div><span>01 / 中国</span><b>Фабрика</b><small>{rows.length} товаров</small></div>
+      <div className="route-connector"><i/><span>RFQ</span></div>
+      <div className="route-node"><div className="route-icon"><ShoppingCart/></div><span>02 / AGENT</span><b>Китайский агент</b><small>{new Set(rows.map(row => row.agent_name)).size} поставщиков</small></div>
+      <div className="route-connector"><i/><span>PI</span></div>
+      <div className="route-node"><div className="route-icon"><Ship/></div><span>03 / TRANSIT</span><b>Логистика</b><small>{active} в работе</small></div>
+      <div className="route-connector"><i/><span>FREIGHT</span></div>
+      <div className="route-node"><div className="route-icon"><Warehouse/></div><span>04 / STOCK</span><b>Склад</b><small>{signed} завершено</small></div>
+    </div>
+  </section>
+}
+
+function MiniSuppliers({ rows }) {
+  const { suppliers } = useMemo(() => buildAnalytics(rows), [rows])
+  const max = Math.max(...suppliers.map(item => item.total), 1)
+  return <section className="panel dashboard-suppliers"><div className="panel-head"><div><span className="panel-tag">SUPPLIER LOAD</span><h2>Нагрузка по агентам</h2></div><Factory size={20}/></div><div className="bar-list">{suppliers.slice(0, 6).map((item, index) => <div className="bar-row" key={item.name}><span>{String(index + 1).padStart(2, '0')}</span><b>{item.name}</b><div><i style={{ width: `${item.total / max * 100}%` }}/></div><strong>{item.total}</strong></div>)}{!suppliers.length && <div className="empty compact"><PackageOpen/><b>Нет данных</b></div>}</div></section>
+}
+
+function MiniCategories({ rows }) {
+  const { categories } = useMemo(() => buildAnalytics(rows), [rows])
+  return <section className="panel category-summary"><div className="panel-head"><div><span className="panel-tag">PRODUCT CATEGORIES</span><h2>Категории товаров</h2></div><Boxes size={20}/></div><div className="category-grid">{categories.slice(0, 6).map(item => <div className="category-cell" key={item.name}><Package size={17}/><span>{item.name}</span><strong>{item.total}</strong><small>{item.suppliersCount} агентов</small></div>)}{!categories.length && <div className="empty compact"><PackageOpen/><b>Нет данных</b></div>}</div></section>
+}
+
+function Dashboard({ rows, onAdd, canEdit, setOpen }) {
+  const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, pi_sent: 0, revision: 0, signed: 0 }), [rows])
+  const active = rows.filter(row => calcStatus(row) !== 'signed').length
+  const supplierCount = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
+
+  return <>
+    <Header title="Центр управления закупками" subtitle="Товары, китайские агенты, документы PI и логистика в одной системе." onAdd={onAdd} canEdit={canEdit} setOpen={setOpen} code="control-center"/>
+    {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Изменения доступны только администратору.</div>}
+    <section className="stats-grid">
+      <Stat icon={Package} label="Товаров" value={rows.length} note="Всего запросов" index="01"/>
+      <Stat icon={Factory} label="Агентов" value={supplierCount} note="Китайские поставщики" index="02"/>
+      <Stat icon={Truck} label="В работе" value={active} note="Активная закупка" index="03"/>
+      <Stat icon={FileCheck2} label="PI подписано" value={counts.signed} note="Завершённые сделки" index="04"/>
+    </section>
+    <ProcurementRoute rows={rows}/>
+    <div className="dashboard-grid"><MiniSuppliers rows={rows}/><MiniCategories rows={rows}/></div>
+    <section className="panel"><div className="panel-head"><div><span className="panel-tag">RECENT REQUESTS</span><h2>Последние запросы</h2></div><Clock3 size={20}/></div><RequestTable rows={rows.slice(0, 6)} compact/></section>
+  </>
+}
+
+function RequestTable({ rows, onEdit, onDelete, canEdit, compact = false }) {
+  if (!rows.length) return <div className="empty"><PackageOpen size={34}/><b>Запросов пока нет</b><span>Администратор может добавить первую товарную позицию.</span></div>
+  return <div className="table-wrap"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>
+    <td><b className="request-no">{row.request_number}</b></td>
+    <td><b>{row.product_name}</b><small>{row.category}</small></td>
+    <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
+    <td>{formatDate(row.request_sent_at)}</td>
+    <td><StatusPill status={calcStatus(row)}/></td>
+    {!compact && <td><div className="row-actions">{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> read_only</span>}</div></td>}
   </tr>)}</tbody></table></div>
 }
 
 function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
-  const [q,setQ]=useState(''); const [status,setStatus]=useState('all')
-  const filtered=rows.filter(r=>(status==='all'||calcStatus(r)===status)&&[r.request_number,r.product_name,r.category,r.agent_name].join(' ').toLowerCase().includes(q.toLowerCase()))
-  return <><Header title="Реестр запросов" subtitle={`${rows.length} позиций в общей базе`} onAdd={onAdd} canEdit={canEdit} setOpen={setOpen}/>
-    <section className="panel registry"><div className="toolbar"><div className="search"><Search size={18}/><input placeholder="Поиск по номеру, товару, категории или агенту" value={q} onChange={e=>setQ(e.target.value)}/></div><div className="filter"><Filter size={17}/><select value={status} onChange={e=>setStatus(e.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([k,[l]])=><option key={k} value={k}>{l}</option>)}</select></div></div>
-    <RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} canEdit={canEdit}/></section></>
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const filtered = rows.filter(row => (status === 'all' || calcStatus(row) === status) && [row.request_number, row.product_name, row.category, row.agent_name].join(' ').toLowerCase().includes(query.toLowerCase()))
+  return <>
+    <Header title="Реестр товарных запросов" subtitle={`${rows.length} позиций в защищённой общей базе`} onAdd={onAdd} canEdit={canEdit} setOpen={setOpen} code="requests"/>
+    {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>READ_ONLY</span> Добавление, редактирование и удаление доступны только администратору.</div>}
+    <section className="panel registry"><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Поиск по номеру, товару, категории или агенту" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} canEdit={canEdit}/></section>
+  </>
+}
+
+function Analytics({ rows, setOpen }) {
+  const { suppliers, categories } = useMemo(() => buildAnalytics(rows), [rows])
+  const maxCategory = Math.max(...categories.map(item => item.total), 1)
+  const topSupplier = suppliers[0]
+  const topCategory = categories[0]
+  const average = suppliers.length ? (rows.length / suppliers.length).toFixed(1) : '0.0'
+
+  return <>
+    <Header title="Агенты и товарная матрица" subtitle="Статистика по китайским поставщикам, категориям и количеству товаров." setOpen={setOpen} code="supplier-analytics"/>
+    <section className="stats-grid analytics-stats">
+      <Stat icon={Factory} label="Всего агентов" value={suppliers.length} note="Активные поставщики" index="01"/>
+      <Stat icon={Package} label="Всего товаров" value={rows.length} note="По всем агентам" index="02"/>
+      <Stat icon={Boxes} label="Категорий" value={categories.length} note={topCategory ? `Лидер: ${topCategory.name}` : 'Нет данных'} index="03"/>
+      <Stat icon={BarChart3} label="Среднее" value={average} note="Товаров на агента" index="04"/>
+    </section>
+    <section className="panel supplier-table-panel"><div className="panel-head"><div><span className="panel-tag">SUPPLIER MATRIX</span><h2>Статистика по агентам</h2><p>{topSupplier ? `Наибольшая нагрузка: ${topSupplier.name} — ${topSupplier.total} товаров` : 'Добавьте запросы для формирования статистики'}</p></div><Globe2 size={20}/></div>
+      {suppliers.length ? <div className="table-wrap"><table><thead><tr><th>Китайский агент</th><th>Товаров</th><th>Категорий</th><th>Какие категории</th><th>PI подписано</th><th>На доработке</th></tr></thead><tbody>{suppliers.map((item, index) => <tr key={item.name}><td><span className="supplier-cell"><span className="matrix-index">{String(index + 1).padStart(2, '0')}</span><Factory size={14}/><b>{item.name}</b></span></td><td><strong className="metric-number">{item.total}</strong></td><td>{item.categoriesCount}</td><td className="category-text">{item.categoriesText}</td><td>{item.signed}</td><td>{item.revision}</td></tr>)}</tbody></table></div> : <div className="empty"><Factory/><b>Поставщиков пока нет</b></div>}
+    </section>
+    <section className="panel"><div className="panel-head"><div><span className="panel-tag">CATEGORY DISTRIBUTION</span><h2>Распределение товаров по категориям</h2></div><Boxes size={20}/></div><div className="category-bars">{categories.map((item, index) => <div className="category-bar" key={item.name}><div><span>{String(index + 1).padStart(2, '0')}</span><b>{item.name}</b><small>{item.suppliersCount} агентов</small></div><div className="bar-track"><i style={{ width: `${item.total / maxCategory * 100}%` }}/></div><strong>{item.total}</strong></div>)}{!categories.length && <div className="empty"><Boxes/><b>Категорий пока нет</b></div>}</div></section>
+  </>
 }
 
 function RequestModal({ value, onClose, onSave }) {
-  const [form,setForm]=useState(value||EMPTY); const [busy,setBusy]=useState(false); const set=(k,v)=>setForm(f=>({...f,[k]:v}))
-  const checks=[['offer_received','Предложение получено','offer_received_at'],['included_calculation','Внесено в расчёт',null],['pi_sent','PI отправлена','pi_sent_at'],['pi_revision','PI отправлена на доработку','pi_revision_at'],['pi_signed','PI подписана','pi_signed_at']]
-  async function submit(e){e.preventDefault();setBusy(true);await onSave(form);setBusy(false)}
-  return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><div><div className="eyebrow">КАРТОЧКА ЗАПРОСА</div><h2>{value?.id?'Редактировать запрос':'Новый запрос'}</h2></div><button onClick={onClose}><X/></button></div><form onSubmit={submit}>
-    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={e=>set('request_number',e.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at||''} onChange={e=>set('request_sent_at',e.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={e=>set('category',e.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<input required value={form.agent_name} onChange={e=>set('agent_name',e.target.value)} placeholder="Имя или компания"/></label><label className="full">Название товара *<input required value={form.product_name} onChange={e=>set('product_name',e.target.value)} placeholder="Введите название товара"/></label></div>
-    <div className="stage-title"><span>Этапы обработки</span><small>Отмечайте по мере прохождения</small></div><div className="stage-list">{checks.map(([key,label,dateKey],i)=><div className={`stage-row ${form[key]?'done':''}`} key={key}><button type="button" className="check" onClick={()=>set(key,!form[key])}>{form[key]&&<Check size={16}/>}</button><span className="stage-number">{i+1}</span><b>{label}</b>{dateKey&&form[key]&&<input type="date" value={form[dateKey]||''} onChange={e=>set(dateKey,e.target.value)}/>}</div>)}</div>
-    <label>Комментарий<textarea rows="3" value={form.notes||''} onChange={e=>set('notes',e.target.value)} placeholder="Условия, замечания, следующий шаг…"/></label>
-    <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>Отмена</button><button className="primary" disabled={busy}>{busy?'Сохранение…':'Сохранить запрос'}<Check size={18}/></button></div>
+  const [form, setForm] = useState(value || EMPTY)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const set = (key, nextValue) => setForm(current => ({ ...current, [key]: nextValue }))
+  const checks = [
+    ['offer_received', 'Предложение получено', 'offer_received_at'],
+    ['included_calculation', 'Внесено в расчёт', null],
+    ['pi_sent', 'PI отправлена', 'pi_sent_at'],
+    ['pi_revision', 'PI отправлена на доработку', 'pi_revision_at'],
+    ['pi_signed', 'PI подписана', 'pi_signed_at']
+  ]
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await onSave(form)
+    } catch (saveError) {
+      setError(saveError.message)
+      setBusy(false)
+    }
+  }
+
+  return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><div><div className="terminal-line">~/requests/edit <span>_</span></div><div className="eyebrow">КАРТОЧКА ЗАПРОСА</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2></div><button onClick={onClose}><X/></button></div><form onSubmit={submit}>
+    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<input required value={form.agent_name} onChange={event => set('agent_name', event.target.value)} placeholder="Имя или компания"/></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
+    <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
+    <label>Комментарий<textarea rows="3" value={form.notes || ''} onChange={event => set('notes', event.target.value)} placeholder="Условия, замечания, следующий шаг…"/></label>
+    {error && <div className="form-error"><CircleAlert size={17}/><div><b>Запрос не сохранён</b><span>{error}</span></div></div>}
+    <div className="modal-actions"><button type="button" className="secondary" onClick={onClose}>ОТМЕНА</button><button className="primary" disabled={busy}>{busy ? 'СОХРАНЕНИЕ…' : 'СОХРАНИТЬ →'}</button></div>
   </form></div></div>
 }
 
 function UsersPage({ profile, setOpen }) {
-  const [users,setUsers]=useState([]); const [email,setEmail]=useState(''); const [role,setRole]=useState('editor'); const [busy,setBusy]=useState(false); const [error,setError]=useState('')
-  const load=async()=>{const {data,error}=await supabase.from('allowed_users').select('*').order('created_at');if(!error)setUsers(data||[])}
-  useEffect(()=>{load()},[])
-  async function invite(e){e.preventDefault();setBusy(true);setError('');const {error}=await supabase.from('allowed_users').upsert({email:email.toLowerCase().trim(),role,invited_by:profile.id},{onConflict:'email'});if(error)setError(error.message);else{setEmail('');load()}setBusy(false)}
-  async function remove(id){if(!confirm('Отозвать приглашение? Уже созданный профиль останется активным, пока администратор не отключит пользователя в Supabase Auth.'))return;await supabase.from('allowed_users').delete().eq('id',id);load()}
-  return <><Header title="Пользователи" subtitle="Приглашения и роли команды" setOpen={setOpen}/><div className="users-layout"><section className="panel invite-card"><div className="panel-head"><div><h2>Пригласить сотрудника</h2><p>Добавьте email до регистрации пользователя</p></div><UserPlus/></div><form onSubmit={invite}><label>Email<input type="email" required value={email} onChange={e=>setEmail(e.target.value)} placeholder="employee@company.com"/></label><label>Роль<select value={role} onChange={e=>setRole(e.target.value)}><option value="editor">Редактор</option><option value="viewer">Только просмотр</option><option value="admin">Администратор</option></select></label>{error&&<div className="auth-message">{error}</div>}<button className="primary wide" disabled={busy}><Mail size={18}/>Добавить приглашение</button></form></section><section className="panel"><div className="panel-head"><div><h2>Разрешённые email</h2><p>{users.length} пользователей и приглашений</p></div></div><div className="user-list">{users.map(u=><div className="user-row" key={u.id}><div className="avatar">{u.email[0].toUpperCase()}</div><div><b>{u.email}</b><small>Добавлен {date(u.created_at?.slice(0,10))}</small></div><span className={`role ${u.role}`}>{roleLabel[u.role]}</span>{u.email!==profile.email&&<button onClick={()=>remove(u.id)}><Trash2 size={17}/></button>}</div>)}</div></section></div></>
+  const [usersList, setUsersList] = useState([])
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState('viewer')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  async function load() {
+    const { data, error: loadError } = await supabase.from('allowed_users').select('*').order('created_at')
+    if (loadError) setError(friendlyError(loadError))
+    else setUsersList(data || [])
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function invite(event) {
+    event.preventDefault()
+    setBusy(true)
+    setError('')
+    const { error: inviteError } = await supabase.from('allowed_users').upsert({ email: email.toLowerCase().trim(), role, invited_by: profile.id }, { onConflict: 'email' })
+    if (inviteError) setError(friendlyError(inviteError))
+    else { setEmail(''); await load() }
+    setBusy(false)
+  }
+
+  async function changeRole(user, nextRole) {
+    setError('')
+    const { error: updateError } = await supabase.from('allowed_users').update({ role: nextRole }).eq('id', user.id)
+    if (updateError) setError(friendlyError(updateError))
+    else await load()
+  }
+
+  async function remove(id) {
+    if (!confirm('Отозвать доступ для этого email?')) return
+    const { error: deleteError } = await supabase.from('allowed_users').delete().eq('id', id)
+    if (deleteError) setError(friendlyError(deleteError))
+    else await load()
+  }
+
+  return <>
+    <Header title="Доступ и роли" subtitle="Все права меняются администратором прямо на сайте." setOpen={setOpen} code="access-control"/>
+    <div className="users-layout"><section className="panel invite-card"><div className="panel-head"><div><span className="panel-tag">INVITE USER</span><h2>Добавить пользователя</h2><p>Новые пользователи получают только просмотр по умолчанию.</p></div><UserPlus size={20}/></div><form onSubmit={invite}><label>Email<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="employee@company.com"/></label><label>Роль<select value={role} onChange={event => setRole(event.target.value)}><option value="viewer">Только просмотр</option><option value="admin">Администратор</option></select></label>{error && <div className="auth-message"><CircleAlert size={16}/>{error}</div>}<button className="primary wide" disabled={busy}><Mail size={17}/> ДОБАВИТЬ ДОСТУП →</button></form></section>
+    <section className="panel"><div className="panel-head"><div><span className="panel-tag">ACCESS LIST</span><h2>Разрешённые email</h2><p>{usersList.length} пользователей и приглашений</p></div><ShieldCheck size={20}/></div><div className="user-list">{usersList.map(user => <div className="user-row" key={user.id}><div className="avatar">{user.email[0].toUpperCase()}</div><div><b>{user.email}</b><small>Добавлен {formatDate(user.created_at?.slice(0, 10))}</small></div>{user.email === profile.email ? <span className="role admin">Текущий администратор</span> : <select className="role-select" value={user.role === 'admin' ? 'admin' : 'viewer'} onChange={event => changeRole(user, event.target.value)}><option value="viewer">Только просмотр</option><option value="admin">Администратор</option></select>}{user.email !== profile.email && <button onClick={() => remove(user.id)}><Trash2 size={16}/></button>}</div>)}</div></section></div>
+  </>
 }
 
 function AuditPage({ setOpen }) {
- const [logs,setLogs]=useState([]); useEffect(()=>{supabase.from('audit_log').select('*').order('created_at',{ascending:false}).limit(100).then(({data})=>setLogs(data||[]))},[])
- const action={INSERT:'создал(а)',UPDATE:'изменил(а)',DELETE:'удалил(а)'}
- return <><Header title="Журнал действий" subtitle="Последние изменения в общей базе" setOpen={setOpen}/><section className="panel"><div className="timeline">{logs.length?logs.map(l=><div className="timeline-row" key={l.id}><div className={`timeline-icon ${l.action.toLowerCase()}`}>{l.action==='INSERT'?<Plus/>:l.action==='DELETE'?<Trash2/>:<Pencil/>}</div><div><b>{l.actor_email||'Система'} {action[l.action]} запрос</b><span>{l.request_number||'Без номера'} · {dateTime(l.created_at)}</span></div></div>):<div className="empty"><Archive/><b>Журнал пока пуст</b></div>}</div></section></>
+  const [logs, setLogs] = useState([])
+  useEffect(() => { supabase.from('audit_log').select('*').order('created_at', { ascending: false }).limit(100).then(({ data }) => setLogs(data || [])) }, [])
+  const action = { INSERT: 'создал(а)', UPDATE: 'изменил(а)', DELETE: 'удалил(а)' }
+  return <><Header title="Журнал действий" subtitle="Контроль всех изменений в товарных запросах." setOpen={setOpen} code="audit-log"/><section className="panel"><div className="timeline">{logs.length ? logs.map(log => <div className="timeline-row" key={log.id}><div className={`timeline-icon ${log.action.toLowerCase()}`}>{log.action === 'INSERT' ? <Plus/> : log.action === 'DELETE' ? <Trash2/> : <Pencil/>}</div><div><b>{log.actor_email || 'Система'} {action[log.action]} запрос</b><span>{log.request_number || 'Без номера'} · {formatDateTime(log.created_at)}</span></div></div>) : <div className="empty"><Archive/><b>Журнал пока пуст</b></div>}</div></section></>
 }
 
 function App() {
-  const [session,setSession]=useState(null),[profile,setProfile]=useState(null),[rows,setRows]=useState([]),[page,setPage]=useState('dashboard'),[modal,setModal]=useState(null),[sideOpen,setSideOpen]=useState(false),[loading,setLoading]=useState(true)
-  useEffect(()=>{supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false)});const {data}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));return()=>data.subscription.unsubscribe()},[])
-  useEffect(()=>{if(!session){setProfile(null);setRows([]);return}loadProfile();loadRows();const channel=supabase.channel('requests-live').on('postgres_changes',{event:'*',schema:'public',table:'requests'},loadRows).subscribe();return()=>supabase.removeChannel(channel)},[session])
-  async function loadProfile(){const {data,error}=await supabase.from('profiles').select('*').eq('id',session.user.id).single();if(error){console.error(error);return}setProfile(data)}
-  async function loadRows(){const {data}=await supabase.from('requests').select('*').order('updated_at',{ascending:false});setRows(data||[])}
-  async function save(form){const payload={...form,status:calcStatus(form),updated_by:session.user.id};delete payload.id;delete payload.created_at;delete payload.updated_at;delete payload.created_by;if(form.id) await supabase.from('requests').update(payload).eq('id',form.id);else await supabase.from('requests').insert({...payload,created_by:session.user.id});setModal(null);loadRows()}
-  async function remove(r){if(!confirm(`Удалить запрос ${r.request_number}?`))return;await supabase.from('requests').delete().eq('id',r.id);loadRows()}
-  if(loading)return <div className="splash"><div className="logo"><span>V</span></div></div>
-  if(!session)return <Login/>
-  if(!profile)return <div className="access-denied"><ShieldCheck size={44}/><h2>Проверяем доступ</h2><p>Если экран не меняется, ваш email ещё не добавлен администратором или SQL-схема не установлена.</p><button className="secondary" onClick={()=>supabase.auth.signOut()}>Выйти</button></div>
-  const canEdit=['admin','editor'].includes(profile.role)
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{page==='dashboard'&&<Dashboard rows={rows} onAdd={()=>setModal(EMPTY)} canEdit={canEdit} setOpen={setSideOpen}/>} {page==='requests'&&<Requests rows={rows} onAdd={()=>setModal(EMPTY)} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page==='users'&&<UsersPage profile={profile} setOpen={setSideOpen}/>} {page==='audit'&&<AuditPage setOpen={setSideOpen}/>}</main>{modal&&<RequestModal value={modal} onClose={()=>setModal(null)} onSave={save}/>}</div>
+  const [session, setSession] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [rows, setRows] = useState([])
+  const [page, setPage] = useState('dashboard')
+  const [modal, setModal] = useState(null)
+  const [sideOpen, setSideOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [dataError, setDataError] = useState('')
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false) })
+    const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => setSession(nextSession))
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (!session) { setProfile(null); setRows([]); return undefined }
+    loadProfile()
+    loadRows()
+    const channel = supabase.channel('requests-live').on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, loadRows).subscribe()
+    return () => supabase.removeChannel(channel)
+  }, [session])
+
+  async function loadProfile() {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+    if (error) setDataError(friendlyError(error))
+    else setProfile(data)
+  }
+
+  async function loadRows() {
+    const { data, error } = await supabase.from('requests').select('*').order('updated_at', { ascending: false })
+    if (error) setDataError(friendlyError(error))
+    else { setRows(data || []); setDataError('') }
+  }
+
+  async function save(form) {
+    if (profile.role !== 'admin') throw new Error('Изменения может вносить только администратор.')
+    const payload = cleanRequest(form, session.user.id)
+    const result = form.id
+      ? await supabase.from('requests').update(payload).eq('id', form.id).select('id').single()
+      : await supabase.from('requests').insert({ ...payload, created_by: session.user.id }).select('id').single()
+    if (result.error) throw new Error(friendlyError(result.error))
+    setModal(null)
+    await loadRows()
+  }
+
+  async function remove(row) {
+    if (profile.role !== 'admin') return
+    if (!confirm(`Удалить запрос ${row.request_number}?`)) return
+    const { error } = await supabase.from('requests').delete().eq('id', row.id)
+    if (error) alert(friendlyError(error))
+    else await loadRows()
+  }
+
+  if (loading) return <div className="splash"><div className="logo">VL</div><span>LOADING PROCUREMENT DATA_</span></div>
+  if (!session) return <Login/>
+  if (!profile) return <div className="access-denied"><ShieldCheck size={40}/><h2>Проверяем доступ</h2><p>{dataError || 'Если экран не меняется, ваш email ещё не добавлен администратором.'}</p><button className="secondary" onClick={() => supabase.auth.signOut()}>ВЫЙТИ</button></div>
+
+  const canEdit = profile.role === 'admin'
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>}</div>
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
