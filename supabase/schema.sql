@@ -123,9 +123,9 @@ create policy "admins manage invitations" on public.allowed_users for all to aut
 create policy "user can see own invitation" on public.allowed_users for select to authenticated using (email=(select email from auth.users where id=auth.uid()));
 
 create policy "team reads requests" on public.requests for select to authenticated using (public.current_user_role() is not null);
-create policy "editors create requests" on public.requests for insert to authenticated with check (public.current_user_role() in ('admin','editor') and created_by=auth.uid() and updated_by=auth.uid());
-create policy "editors update requests" on public.requests for update to authenticated using (public.current_user_role() in ('admin','editor')) with check (public.current_user_role() in ('admin','editor') and updated_by=auth.uid());
-create policy "editors delete requests" on public.requests for delete to authenticated using (public.current_user_role() in ('admin','editor'));
+create policy "admins create requests" on public.requests for insert to authenticated with check (public.current_user_role()='admin' and created_by=auth.uid() and updated_by=auth.uid());
+create policy "admins update requests" on public.requests for update to authenticated using (public.current_user_role()='admin') with check (public.current_user_role()='admin' and updated_by=auth.uid());
+create policy "admins delete requests" on public.requests for delete to authenticated using (public.current_user_role()='admin');
 create policy "team reads audit" on public.audit_log for select to authenticated using (public.current_user_role() is not null);
 
 grant usage on schema public to authenticated;
