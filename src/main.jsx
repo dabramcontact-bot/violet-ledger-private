@@ -237,13 +237,52 @@ function MiniCategories({ rows }) {
   return <section className="panel category-summary"><div className="panel-head"><div><span className="panel-tag">PRODUCT CATEGORIES</span><h2>Категории товаров</h2></div><Boxes size={20}/></div><div className="category-grid">{categories.slice(0, 6).map(item => <div className="category-cell" key={item.name}><Package size={17}/><span>{item.name}</span><strong>{item.total}</strong><small>{item.suppliersCount} агентов</small></div>)}{!categories.length && <div className="empty compact"><PackageOpen/><b>Нет данных</b></div>}</div></section>
 }
 
-function Dashboard({ rows, onAdd, canEdit, setOpen }) {
+function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit, setOpen }) {
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
+  const arrived = rows.filter(row => row.shipment_status === 'arrived').length
+  const suppliers = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
+
+  return <section className="animated-hero">
+    <div className="hero-nav"><button className="menu hero-menu" onClick={() => setOpen(true)}><Menu/></button><div className="hero-wordmark"><span className="hero-mark"><Package/></span><b>VIOLET LEDGER</b><small>LIVE PROCUREMENT NETWORK</small></div><div className="hero-live"><i/> SYSTEM ONLINE</div></div>
+    <div className="hero-copy">
+      <div className="hero-badge"><Globe2 size={14}/> CHINA → LOGISTICS → WAREHOUSE</div>
+      <h1>Товары из Китая.<br/><span>Весь путь под контролем.</span></h1>
+      <p>Запросы, агенты, документы PI и движение каждой поставки — от фабрики до вашего склада.</p>
+      <div className="hero-actions">{canEdit && <button className="primary" onClick={onAdd}>Новый запрос <ArrowRight size={16}/></button>}<button className="secondary" onClick={onOpenLogistics}>Открыть логистику <ArrowRight size={16}/></button></div>
+    </div>
+    <div className="hero-network" aria-label="Анимированный маршрут движения товаров из Китая на склад">
+      <svg className="hero-routes" viewBox="0 0 1200 360" preserveAspectRatio="none" aria-hidden="true">
+        <defs><filter id="routeGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+        <g className="route-lines">
+          <path d="M30 55 C260 65 410 155 600 185"/><path d="M20 125 C265 125 420 170 600 185"/><path d="M20 210 C265 210 430 190 600 185"/><path d="M45 305 C285 280 445 210 600 185"/>
+          <path d="M600 185 C780 175 925 80 1170 55"/><path d="M600 185 C800 180 955 140 1180 135"/><path d="M600 185 C805 195 960 220 1180 220"/><path d="M600 185 C790 210 940 285 1160 315"/>
+        </g>
+        <g className="moving-product"><animateMotion dur="7.5s" repeatCount="indefinite" path="M30 55 C260 65 410 155 600 185"/><text x="-12" y="8">💡</text></g>
+        <g className="moving-product delay-1"><animateMotion dur="9s" repeatCount="indefinite" path="M20 125 C265 125 420 170 600 185"/><text x="-12" y="8">🪑</text></g>
+        <g className="moving-product delay-2"><animateMotion dur="8.2s" repeatCount="indefinite" path="M20 210 C265 210 430 190 600 185"/><text x="-12" y="8">🧳</text></g>
+        <g className="moving-product delay-3"><animateMotion dur="10s" repeatCount="indefinite" path="M45 305 C285 280 445 210 600 185"/><text x="-12" y="8">🪴</text></g>
+        <g className="moving-product outbound"><animateMotion dur="8s" repeatCount="indefinite" path="M600 185 C780 175 925 80 1170 55"/><text x="-12" y="8">📦</text></g>
+        <g className="moving-product outbound delay-1"><animateMotion dur="9.3s" repeatCount="indefinite" path="M600 185 C800 180 955 140 1180 135"/><text x="-12" y="8">🛋️</text></g>
+        <g className="moving-product outbound delay-2"><animateMotion dur="7.8s" repeatCount="indefinite" path="M600 185 C805 195 960 220 1180 220"/><text x="-12" y="8">🚲</text></g>
+        <g className="moving-product outbound delay-3"><animateMotion dur="10.5s" repeatCount="indefinite" path="M600 185 C790 210 940 285 1160 315"/><text x="-12" y="8">🏊</text></g>
+      </svg>
+      <div className="floating-node node-china"><Factory/><span>CHINA FACTORY</span></div>
+      <div className="floating-node node-agent"><ShoppingCart/><span>AGENT / PI</span></div>
+      <div className="hero-core"><div className="core-ring ring-one"/><div className="core-ring ring-two"/><div className="core-box"><Container/><b>CARGO HUB</b><span>{inTransit} IN TRANSIT</span></div></div>
+      <div className="floating-node node-ship"><Ship/><span>FREIGHT</span></div>
+      <div className="floating-node node-stock"><Warehouse/><span>WAREHOUSE</span></div>
+    </div>
+    <div className="hero-kpis"><div><strong>{rows.length}</strong><span>товаров в системе</span></div><div><strong>{suppliers}</strong><span>китайских агентов</span></div><div><strong>{inTransit}</strong><span>сейчас в пути</span></div><div><strong>{arrived}</strong><span>принято на склад</span></div></div>
+  </section>
+}
+
+function Dashboard({ rows, onAdd, onOpenLogistics, canEdit, setOpen }) {
   const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, pi_sent: 0, revision: 0, signed: 0 }), [rows])
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const supplierCount = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
 
   return <>
-    <Header title="Центр управления закупками" subtitle="Товары, китайские агенты, документы PI и логистика в одной системе." onAdd={onAdd} canEdit={canEdit} setOpen={setOpen} code="control-center"/>
+    <AnimatedHero rows={rows} onAdd={onAdd} onOpenLogistics={onOpenLogistics} canEdit={canEdit} setOpen={setOpen}/>
     {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Изменения доступны только администратору.</div>}
     <section className="stats-grid">
       <Stat icon={Package} label="Товаров" value={rows.length} note="Всего запросов" index="01"/>
@@ -518,7 +557,7 @@ function App() {
   if (!profile) return <div className="access-denied"><ShieldCheck size={40}/><h2>Проверяем доступ</h2><p>{dataError || 'Если экран не меняется, ваш email ещё не добавлен администратором.'}</p><button className="secondary" onClick={() => supabase.auth.signOut()}>ВЫЙТИ</button></div>
 
   const canEdit = profile.role === 'admin'
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} onOpenLogistics={() => setPage('logistics')} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
