@@ -81,8 +81,42 @@ function friendlyError(error) {
   if (!error) return 'Неизвестная ошибка'
   if (error.code === '23505') return 'Такой номер запроса уже существует.'
   if (error.code === '42501') return 'Недостаточно прав. Изменения может вносить только администратор.'
+  if (/JWT issued at future/i.test(error.message || '')) return 'Сессия рассинхронизирована. Обновите страницу или войдите в систему снова.'
   if (/invalid input syntax for type date/i.test(error.message || '')) return 'Проверьте заполнение дат.'
   return error.message || 'Не удалось сохранить изменения.'
+}
+
+let authRefreshPromise = null
+
+function isFutureJwtError(error) {
+  return /JWT issued at future/i.test(error?.message || '')
+}
+
+async function refreshAuthSession() {
+  if (!authRefreshPromise) {
+    authRefreshPromise = (async () => {
+      try {
+        return await supabase.auth.refreshSession()
+      } finally {
+        authRefreshPromise = null
+      }
+    })()
+  }
+  return authRefreshPromise
+}
+
+async function queryWithSessionRecovery(queryFactory) {
+  let result = await queryFactory()
+  if (!isFutureJwtError(result.error)) return result
+
+  const refreshResult = await refreshAuthSession()
+  if (refreshResult.error || !refreshResult.data.session) {
+    return { data: null, error: refreshResult.error || result.error }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 350))
+  result = await queryFactory()
+  return result
 }
 
 const formatDate = value => value
@@ -535,13 +569,13 @@ function App() {
   }, [session])
 
   async function loadProfile() {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
+    const { data, error } = await queryWithSessionRecovery(() => supabase.from('profiles').select('*').eq('id', session.user.id).single())
     if (error) setDataError(friendlyError(error))
     else setProfile(data)
   }
 
   async function loadRows() {
-    const { data, error } = await supabase.from('requests').select('*').order('updated_at', { ascending: false })
+    const { data, error } = await queryWithSessionRecovery(() => supabase.from('requests').select('*').order('updated_at', { ascending: false }))
     if (error) setDataError(friendlyError(error))
     else { setRows(data || []); setDataError('') }
   }
