@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { createClient } from '@supabase/supabase-js'
 import {
@@ -206,18 +206,18 @@ function Login() {
 
 function Sidebar({ page, setPage, profile, open, setOpen }) {
   const items = [
-    ['dashboard', LayoutDashboard, 'Центр управления'],
-    ['analytics', BarChart3, 'Агенты и категории'],
-    ['logistics', Truck, 'Логистика и склад'],
-    ['requests', ClipboardList, 'Реестр запросов'],
-    ['audit', Activity, 'Журнал действий']
+    ['dashboard', LayoutDashboard, 'Обзор'],
+    ['analytics', BarChart3, 'Аналитика'],
+    ['logistics', Truck, 'Логистика'],
+    ['requests', ClipboardList, 'Запросы'],
+    ['audit', Activity, 'Журнал']
   ]
-  if (profile?.role === 'admin') items.push(['users', Users, 'Доступ и роли'])
+  if (profile?.role === 'admin') items.push(['users', Users, 'Доступ'])
 
   return <>
     <div className={`mobile-overlay ${open ? 'show' : ''}`} onClick={() => setOpen(false)}/>
     <aside className={open ? 'open' : ''}>
-      <div className="brand"><div className="logo">VL</div><div><b>VIOLET LEDGER</b><small>CHINA PROCUREMENT OS</small></div><button className="close-mobile" onClick={() => setOpen(false)}><X/></button></div>
+      <div className="brand"><div className="logo">VL</div><div><b>VIOLET LEDGER</b><small>CHINA PROCUREMENT OS</small></div><button className="close-mobile" aria-label={open ? 'Закрыть меню' : 'Открыть меню'} onClick={() => setOpen(!open)}>{open ? <X/> : <Menu/>}</button></div>
       <div className="side-route"><span>CN</span><i/><span>BY</span></div>
       <nav>{items.map(([id, Icon, label], index) => <button key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setOpen(false) }}><span className="nav-index">0{index + 1}</span><Icon size={17}/><span>{label}</span>{page === id && <ChevronRight size={15}/>}</button>)}</nav>
       <div className="side-footer"><div className="avatar">{profile?.email?.[0]?.toUpperCase()}</div><div><b>{profile?.email}</b><small>{roleLabel[profile?.role]}</small></div><button title="Выйти" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button></div>
@@ -294,30 +294,92 @@ function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
   </section>
 }
 
+function usePhantomMotion() {
+  const storyRef = useRef(null)
+
+  useEffect(() => {
+    const story = storyRef.current
+    if (!story) return undefined
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const revealItems = [...story.querySelectorAll('[data-reveal]')]
+    const hero = story.querySelector('.animated-hero')
+
+    if (reducedMotion) {
+      story.classList.add('story-ready', 'reduce-motion')
+      revealItems.forEach(item => item.classList.add('is-visible'))
+      return undefined
+    }
+
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return
+        entry.target.classList.add('is-visible')
+        observer.unobserve(entry.target)
+      })
+    }, { threshold: 0.16, rootMargin: '0px 0px -7% 0px' })
+
+    revealItems.forEach(item => observer.observe(item))
+    requestAnimationFrame(() => story.classList.add('story-ready'))
+
+    let frame = 0
+    const updateParallax = () => {
+      frame = 0
+      if (!hero) return
+      const rect = hero.getBoundingClientRect()
+      const distance = Math.max(hero.offsetHeight - window.innerHeight * 0.32, 1)
+      const progress = Math.min(1, Math.max(0, -rect.top / distance))
+      story.style.setProperty('--hero-shift', `${Math.round(progress * -118)}px`)
+      story.style.setProperty('--layer-two-shift', `${Math.round(progress * -48)}px`)
+      story.style.setProperty('--layer-three-shift', `${Math.round(progress * -28)}px`)
+      story.style.setProperty('--hero-copy-shift', `${Math.round(progress * -34)}px`)
+      story.style.setProperty('--hero-copy-opacity', String(1 - Math.min(progress * .58, .48)))
+    }
+    const requestParallax = () => {
+      if (frame) return
+      frame = requestAnimationFrame(updateParallax)
+    }
+
+    updateParallax()
+    window.addEventListener('scroll', requestParallax, { passive: true })
+    window.addEventListener('resize', requestParallax)
+
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('scroll', requestParallax)
+      window.removeEventListener('resize', requestParallax)
+      if (frame) cancelAnimationFrame(frame)
+    }
+  }, [])
+
+  return storyRef
+}
+
 function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
   const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, pi_sent: 0, revision: 0, signed: 0 }), [rows])
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const arrived = rows.filter(row => row.shipment_status === 'arrived').length
   const supplierCount = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
+  const storyRef = usePhantomMotion()
 
-  return <div className="phantom-story">
+  return <div className="phantom-story" ref={storyRef}>
     <AnimatedHero rows={rows} onAdd={onAdd} onOpenLogistics={onOpenLogistics} canEdit={canEdit}/>
     {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Изменения доступны только администратору.</div>}
 
     <section className="story-section story-products">
       <div className="story-grid">
-        <article className="story-card story-blue">
+        <article className="story-card story-blue" data-reveal="card" style={{ '--reveal-delay': '0ms' }}>
           <h3>Все запросы<br/>в одном месте.</h3>
           <div className="story-cloud"><Package/><span>{rows.length}</span></div>
           <div className="story-floating-pill"><ClipboardList/><small>Активные запросы</small><strong>{rows.length - counts.signed}</strong></div>
         </article>
-        <article className="story-card story-violet">
+        <article className="story-card story-violet" data-reveal="card" style={{ '--reveal-delay': '110ms' }}>
           <h3>PI движется быстро.<br/>Даже после правок.</h3>
           <div className="story-message message-one">Получено <b>{counts.offer}</b></div>
           <div className="story-message message-two">На доработке <b>{counts.revision}</b></div>
           <div className="story-coin"><FileCheck2/><span>{counts.signed}</span></div>
         </article>
-        <article className="story-card story-peach">
+        <article className="story-card story-peach" data-reveal="card" style={{ '--reveal-delay': '220ms' }}>
           <h3>Путь от фабрики<br/>до склада виден целиком.</h3>
           <div className="story-route-card"><Factory/><i/><Truck/><i/><Warehouse/></div>
           <div className="story-route-metrics"><span><b>{inTransit}</b> в пути</span><span><b>{arrived}</b> на складе</span></div>
@@ -326,23 +388,23 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
     </section>
 
     <section className="story-section story-dark story-statement">
-      <h2>Контролируете вы,<br/>система <span className="statement-mark"><ShieldCheck/></span> помогает</h2>
-      <button className="primary" onClick={onOpenLogistics}>Смотреть путь товара <ArrowRight size={16}/></button>
+      <h2 data-reveal="statement">Контролируете вы,<br/>система <span className="statement-mark"><ShieldCheck/></span> помогает</h2>
+      <button className="primary" data-reveal="statement" style={{ '--reveal-delay': '140ms' }} onClick={onOpenLogistics}>Смотреть путь товара <ArrowRight size={16}/></button>
     </section>
 
     <section className="story-section story-dark story-cards">
       <div className="story-label"><ShieldCheck size={15}/> Ваша система контроля</div>
       <div className="control-grid">
-        <article className="control-card control-white"><h3>Данные защищены.<br/>Доступ — только по ролям.</h3><div className="control-pattern"><ShieldCheck/><span>RLS</span></div></article>
-        <article className="control-card control-yellow"><h3>Команда видит только<br/>разрешённую информацию.</h3><div className="chat-stack"><span>Нужен доступ?</span><span>Только просмотр.</span></div></article>
-        <article className="control-card control-pink"><h3>Каждое изменение<br/>фиксируется автоматически.</h3><div className="audit-device"><Activity/><b>Журнал действий</b><span>{rows.length} товаров под контролем</span></div></article>
+        <article className="control-card control-white" data-reveal="card" style={{ '--reveal-delay': '0ms' }}><h3>Данные защищены.<br/>Доступ — только по ролям.</h3><div className="control-pattern"><ShieldCheck/><span>RLS</span></div></article>
+        <article className="control-card control-yellow" data-reveal="card" style={{ '--reveal-delay': '110ms' }}><h3>Команда видит только<br/>разрешённую информацию.</h3><div className="chat-stack"><span>Нужен доступ?</span><span>Только просмотр.</span></div></article>
+        <article className="control-card control-pink" data-reveal="card" style={{ '--reveal-delay': '220ms' }}><h3>Каждое изменение<br/>фиксируется автоматически.</h3><div className="audit-device"><Activity/><b>Журнал действий</b><span>{rows.length} товаров под контролем</span></div></article>
       </div>
     </section>
 
     <section className="story-section story-final">
-      <small>Больше, чем реестр.</small>
-      <h2>Начните.<br/>Добавьте <span className="final-mark"><Package/></span> запрос.</h2>
-      {canEdit && <button className="secondary" onClick={onAdd}>Создать новый запрос <ArrowRight size={16}/></button>}
+      <small data-reveal="final">Больше, чем реестр.</small>
+      <h2 data-reveal="final" style={{ '--reveal-delay': '90ms' }}>Начните.<br/>Добавьте <span className="final-mark"><Package/></span> запрос.</h2>
+      {canEdit && <button className="secondary" data-reveal="final" style={{ '--reveal-delay': '180ms' }} onClick={onAdd}>Создать новый запрос <ArrowRight size={16}/></button>}
       <p>{supplierCount} китайских агентов · {rows.length} товаров · {inTransit} поставок в пути</p>
     </section>
   </div>
