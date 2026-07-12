@@ -241,6 +241,7 @@ function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit, setOpen }) {
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const arrived = rows.filter(row => row.shipment_status === 'arrived').length
   const suppliers = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
+  const signed = rows.filter(row => row.pi_signed).length
 
   return <section className="animated-hero">
     <div className="hero-nav"><button className="menu hero-menu" onClick={() => setOpen(true)}><Menu/></button><div className="hero-wordmark"><span className="hero-mark"><Package/></span><b>VIOLET LEDGER</b><small>LIVE PROCUREMENT NETWORK</small></div><div className="hero-live"><i/> SYSTEM ONLINE</div></div>
@@ -257,20 +258,33 @@ function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit, setOpen }) {
           <path d="M30 55 C260 65 410 155 600 185"/><path d="M20 125 C265 125 420 170 600 185"/><path d="M20 210 C265 210 430 190 600 185"/><path d="M45 305 C285 280 445 210 600 185"/>
           <path d="M600 185 C780 175 925 80 1170 55"/><path d="M600 185 C800 180 955 140 1180 135"/><path d="M600 185 C805 195 960 220 1180 220"/><path d="M600 185 C790 210 940 285 1160 315"/>
         </g>
-        <g className="moving-product"><animateMotion dur="7.5s" repeatCount="indefinite" path="M30 55 C260 65 410 155 600 185"/><text x="-12" y="8">💡</text></g>
-        <g className="moving-product delay-1"><animateMotion dur="9s" repeatCount="indefinite" path="M20 125 C265 125 420 170 600 185"/><text x="-12" y="8">🪑</text></g>
-        <g className="moving-product delay-2"><animateMotion dur="8.2s" repeatCount="indefinite" path="M20 210 C265 210 430 190 600 185"/><text x="-12" y="8">🧳</text></g>
-        <g className="moving-product delay-3"><animateMotion dur="10s" repeatCount="indefinite" path="M45 305 C285 280 445 210 600 185"/><text x="-12" y="8">🪴</text></g>
-        <g className="moving-product outbound"><animateMotion dur="8s" repeatCount="indefinite" path="M600 185 C780 175 925 80 1170 55"/><text x="-12" y="8">📦</text></g>
-        <g className="moving-product outbound delay-1"><animateMotion dur="9.3s" repeatCount="indefinite" path="M600 185 C800 180 955 140 1180 135"/><text x="-12" y="8">🛋️</text></g>
-        <g className="moving-product outbound delay-2"><animateMotion dur="7.8s" repeatCount="indefinite" path="M600 185 C805 195 960 220 1180 220"/><text x="-12" y="8">🚲</text></g>
-        <g className="moving-product outbound delay-3"><animateMotion dur="10.5s" repeatCount="indefinite" path="M600 185 C790 210 940 285 1160 315"/><text x="-12" y="8">🏊</text></g>
+        {[
+          ['7.5s', 'M30 55 C260 65 410 155 600 185'],
+          ['9s', 'M20 125 C265 125 420 170 600 185'],
+          ['8.2s', 'M20 210 C265 210 430 190 600 185'],
+          ['10s', 'M45 305 C285 280 445 210 600 185'],
+          ['8s', 'M600 185 C780 175 925 80 1170 55'],
+          ['9.3s', 'M600 185 C800 180 955 140 1180 135'],
+          ['7.8s', 'M600 185 C805 195 960 220 1180 220'],
+          ['10.5s', 'M600 185 C790 210 940 285 1160 315']
+        ].map(([duration, path], index) => <g className={`moving-product ${index > 3 ? 'outbound' : ''}`} key={path}>
+          <animateMotion dur={duration} repeatCount="indefinite" path={path}/>
+          <circle r="10"/>
+          <rect x="-5" y="-5" width="10" height="10" rx="2"/>
+        </g>)}
       </svg>
       <div className="floating-node node-china"><Factory/><span>CHINA FACTORY</span></div>
       <div className="floating-node node-agent"><ShoppingCart/><span>AGENT / PI</span></div>
       <div className="hero-core"><div className="core-ring ring-one"/><div className="core-ring ring-two"/><div className="core-box"><Container/><b>CARGO HUB</b><span>{inTransit} IN TRANSIT</span></div></div>
       <div className="floating-node node-ship"><Ship/><span>FREIGHT</span></div>
       <div className="floating-node node-stock"><Warehouse/><span>WAREHOUSE</span></div>
+      <div className="hero-product-card" aria-hidden="true">
+        <div className="product-card-head"><span>VL OPS BOARD</span><b>{rows.length} requests</b></div>
+        <div className="product-card-row"><i className="ok"/><span>PI signed</span><strong>{signed}</strong></div>
+        <div className="product-card-row"><i className="blue"/><span>In transit</span><strong>{inTransit}</strong></div>
+        <div className="product-card-row"><i/><span>Warehouse</span><strong>{arrived}</strong></div>
+        <div className="product-card-bars"><i style={{ height: '34%' }}/><i style={{ height: '58%' }}/><i style={{ height: '44%' }}/><i style={{ height: '76%' }}/><i style={{ height: '62%' }}/></div>
+      </div>
     </div>
     <div className="hero-kpis"><div><strong>{rows.length}</strong><span>товаров в системе</span></div><div><strong>{suppliers}</strong><span>китайских агентов</span></div><div><strong>{inTransit}</strong><span>сейчас в пути</span></div><div><strong>{arrived}</strong><span>принято на склад</span></div></div>
   </section>
