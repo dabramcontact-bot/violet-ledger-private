@@ -272,31 +272,25 @@ function MiniCategories({ rows }) {
 }
 
 function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
-  const signed = rows.filter(row => row.pi_signed).length
-  const categories = new Set(rows.map(row => row.category).filter(Boolean)).size
-
-  return <section className="animated-hero" data-scene="hero">
-    <div className="hero-copy">
-      <div className="hero-eyebrow"><Route/> Китай → агент → склад</div>
-      <h1 aria-label="Весь путь товара. В одной системе.">
-        <span className="hero-title-line">Весь путь товара.</span>
-        <span className="hero-title-line hero-title-line-two">В одной <i className="hero-inline-mark"><Package/></i> системе.</span>
-      </h1>
-      <p>Запросы, предложения, PI и логистика собраны в одном спокойном рабочем пространстве.</p>
-      <div className="hero-actions">{canEdit ? <button className="primary" onClick={onAdd}>Новый запрос <ArrowRight size={16}/></button> : <button className="primary" onClick={onOpenLogistics}>Смотреть логистику <ArrowRight size={16}/></button>}</div>
-      <div className="hero-scroll-cue"><i/> Листайте, чтобы увидеть путь</div>
-    </div>
-    <div className="hero-showcase" aria-hidden="true">
-      <div className="showcase-layer layer-three"/>
-      <div className="showcase-layer layer-two"/>
-      <div className="showcase-card">
-        <div className="showcase-topline"><span>VIOLET FLOW</span><b>01</b></div>
-        <span>Закупка движется.<br/>Вы видите каждый этап.</span>
-        <div className="showcase-orbit"><Factory/><i/><Ship/><i/><Warehouse/></div>
-        <div className="showcase-balance"><Package/><div><small>В системе</small><strong>{rows.length} запросов</strong></div></div>
-        <div className="showcase-foot"><b>{categories}</b><span>категорий</span><b>{signed}</b><span>PI подписано</span></div>
-        <div className="showcase-pulse pulse-one"/><div className="showcase-pulse pulse-two"/>
+  return <section className="animated-hero cinematic-hero" data-scene="hero">
+    <div className="cinematic-panel">
+      <svg className="cinematic-ribbons" viewBox="0 0 1200 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <g className="ribbon-field">
+          <path className="ribbon ribbon-lilac" d="M-180 80 C120 0 300 350 560 270 S940 -40 1380 110"/>
+          <path className="ribbon ribbon-rust" d="M-170 610 C120 410 270 640 520 520 S870 210 1390 330"/>
+          <path className="ribbon ribbon-green" d="M-170 470 C120 560 320 270 600 390 S970 610 1390 420"/>
+          <path className="ribbon ribbon-sand" d="M-180 360 C100 210 350 520 610 430 S940 110 1390 220"/>
+          <path className="ribbon ribbon-blue" d="M-160 270 C120 420 330 130 610 260 S980 520 1390 300"/>
+          <path className="ribbon ribbon-violet" d="M-170 700 C160 490 360 760 650 590 S1030 280 1390 500"/>
+        </g>
+      </svg>
+      <div className="cinematic-shade"/>
+      <div className="cinematic-copy">
+        <small>Система закупок, которая ведёт товар</small>
+        <h1>Весь путь товара:<br/>запрос, PI, логистика<br/>и склад</h1>
+        {canEdit ? <button className="cinematic-cta" onClick={onAdd}><Package size={15}/> Создать запрос</button> : <button className="cinematic-cta" onClick={onOpenLogistics}><Route size={15}/> Смотреть маршрут</button>}
       </div>
+      <div className="cinematic-status"><i/><span>CHINA PROCUREMENT / LIVE</span><b>{rows.length}</b></div>
     </div>
   </section>
 }
@@ -385,6 +379,11 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
   return <div className="phantom-story" ref={storyRef}>
     <AnimatedHero rows={rows} onAdd={onAdd} onOpenLogistics={onOpenLogistics} canEdit={canEdit}/>
     {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Изменения доступны только администратору.</div>}
+
+    <section className="story-section story-manifesto" data-scene="manifesto">
+      <h2 data-reveal="statement">Управление закупками<br/>для <span className="manifesto-mark"><Route/></span> всей команды</h2>
+      <button className="manifesto-cta" data-reveal="statement" style={{ '--reveal-delay': '130ms' }} onClick={onOpenLogistics}>Смотреть этапы <ArrowRight size={15}/></button>
+    </section>
 
     <section className="story-section story-products" data-scene="products">
       <div className="section-intro" data-reveal="intro">
