@@ -275,20 +275,27 @@ function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
   const signed = rows.filter(row => row.pi_signed).length
   const categories = new Set(rows.map(row => row.category).filter(Boolean)).size
 
-  return <section className="animated-hero">
+  return <section className="animated-hero" data-scene="hero">
     <div className="hero-copy">
-      <h1>Запросы, PI<br/>и <span className="hero-inline-mark"><Package/></span> логистика</h1>
-      <p>Одна спокойная система для всего пути товара — от первого запроса китайскому агенту до вашего склада.</p>
+      <div className="hero-eyebrow"><Route/> Китай → агент → склад</div>
+      <h1 aria-label="Весь путь товара. В одной системе.">
+        <span className="hero-title-line">Весь путь товара.</span>
+        <span className="hero-title-line hero-title-line-two">В одной <i className="hero-inline-mark"><Package/></i> системе.</span>
+      </h1>
+      <p>Запросы, предложения, PI и логистика собраны в одном спокойном рабочем пространстве.</p>
       <div className="hero-actions">{canEdit ? <button className="primary" onClick={onAdd}>Новый запрос <ArrowRight size={16}/></button> : <button className="primary" onClick={onOpenLogistics}>Смотреть логистику <ArrowRight size={16}/></button>}</div>
+      <div className="hero-scroll-cue"><i/> Листайте, чтобы увидеть путь</div>
     </div>
     <div className="hero-showcase" aria-hidden="true">
       <div className="showcase-layer layer-three"/>
       <div className="showcase-layer layer-two"/>
       <div className="showcase-card">
-        <span>Один центр для ваших закупок.</span>
+        <div className="showcase-topline"><span>VIOLET FLOW</span><b>01</b></div>
+        <span>Закупка движется.<br/>Вы видите каждый этап.</span>
         <div className="showcase-orbit"><Factory/><i/><Ship/><i/><Warehouse/></div>
         <div className="showcase-balance"><Package/><div><small>В системе</small><strong>{rows.length} запросов</strong></div></div>
         <div className="showcase-foot"><b>{categories}</b><span>категорий</span><b>{signed}</b><span>PI подписано</span></div>
+        <div className="showcase-pulse pulse-one"/><div className="showcase-pulse pulse-two"/>
       </div>
     </div>
   </section>
@@ -317,10 +324,16 @@ function usePhantomMotion() {
         entry.target.classList.add('is-visible')
         observer.unobserve(entry.target)
       })
-    }, { threshold: 0.16, rootMargin: '0px 0px -7% 0px' })
+    }, { threshold: 0.08, rootMargin: '0px 0px -9% 0px' })
 
     revealItems.forEach(item => observer.observe(item))
     requestAnimationFrame(() => story.classList.add('story-ready'))
+
+    const revealFallback = window.setTimeout(() => {
+      revealItems.forEach(item => {
+        if (item.getBoundingClientRect().top < window.innerHeight * 1.15) item.classList.add('is-visible')
+      })
+    }, 1400)
 
     let frame = 0
     const updateParallax = () => {
@@ -329,11 +342,17 @@ function usePhantomMotion() {
       const rect = hero.getBoundingClientRect()
       const distance = Math.max(hero.offsetHeight - window.innerHeight * 0.32, 1)
       const progress = Math.min(1, Math.max(0, -rect.top / distance))
-      story.style.setProperty('--hero-shift', `${Math.round(progress * -118)}px`)
-      story.style.setProperty('--layer-two-shift', `${Math.round(progress * -48)}px`)
-      story.style.setProperty('--layer-three-shift', `${Math.round(progress * -28)}px`)
-      story.style.setProperty('--hero-copy-shift', `${Math.round(progress * -34)}px`)
-      story.style.setProperty('--hero-copy-opacity', String(1 - Math.min(progress * .58, .48)))
+      story.style.setProperty('--hero-shift', `${Math.round(progress * -82)}px`)
+      story.style.setProperty('--layer-two-shift', `${Math.round(progress * -30)}px`)
+      story.style.setProperty('--layer-three-shift', `${Math.round(progress * -16)}px`)
+      story.style.setProperty('--hero-copy-shift', `${Math.round(progress * -26)}px`)
+      story.style.setProperty('--hero-copy-opacity', String(1 - Math.min(progress * .48, .42)))
+
+      story.querySelectorAll('[data-scene]').forEach(scene => {
+        const sceneRect = scene.getBoundingClientRect()
+        const sceneProgress = Math.min(1, Math.max(0, (window.innerHeight - sceneRect.top) / (window.innerHeight + sceneRect.height)))
+        scene.style.setProperty('--scene-progress', sceneProgress.toFixed(3))
+      })
     }
     const requestParallax = () => {
       if (frame) return
@@ -346,6 +365,7 @@ function usePhantomMotion() {
 
     return () => {
       observer.disconnect()
+      window.clearTimeout(revealFallback)
       window.removeEventListener('scroll', requestParallax)
       window.removeEventListener('resize', requestParallax)
       if (frame) cancelAnimationFrame(frame)
@@ -366,7 +386,12 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
     <AnimatedHero rows={rows} onAdd={onAdd} onOpenLogistics={onOpenLogistics} canEdit={canEdit}/>
     {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>РЕЖИМ ПРОСМОТРА</span> Изменения доступны только администратору.</div>}
 
-    <section className="story-section story-products">
+    <section className="story-section story-products" data-scene="products">
+      <div className="section-intro" data-reveal="intro">
+        <div className="story-label story-label-light"><Boxes size={15}/> Три рабочих этапа</div>
+        <h2>Запрос. PI. Доставка.</h2>
+        <p>Не таблица на главной, а наглядный путь каждой закупки.</p>
+      </div>
       <div className="story-grid">
         <article className="story-card story-blue" data-reveal="card" style={{ '--reveal-delay': '0ms' }}>
           <h3>Все запросы<br/>в одном месте.</h3>
@@ -387,13 +412,18 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
       </div>
     </section>
 
-    <section className="story-section story-dark story-statement">
-      <h2 data-reveal="statement">Контролируете вы,<br/>система <span className="statement-mark"><ShieldCheck/></span> помогает</h2>
+    <section className="story-section story-dark story-statement" data-scene="statement">
+      <div className="statement-orbit" aria-hidden="true"><i/><i/><i/></div>
+      <h2 data-reveal="statement">Управляете вы.<br/>Система <span className="statement-mark"><ShieldCheck/></span> держит ритм.</h2>
       <button className="primary" data-reveal="statement" style={{ '--reveal-delay': '140ms' }} onClick={onOpenLogistics}>Смотреть путь товара <ArrowRight size={16}/></button>
     </section>
 
-    <section className="story-section story-dark story-cards">
-      <div className="story-label"><ShieldCheck size={15}/> Ваша система контроля</div>
+    <section className="story-section story-dark story-cards" data-scene="security">
+      <div className="section-intro section-intro-dark" data-reveal="intro">
+        <div className="story-label"><ShieldCheck size={15}/> Ваша система контроля</div>
+        <h2>Защита без лишнего шума.</h2>
+        <p>Роли, журнал и правила доступа работают в фоне.</p>
+      </div>
       <div className="control-grid">
         <article className="control-card control-white" data-reveal="card" style={{ '--reveal-delay': '0ms' }}><h3>Данные защищены.<br/>Доступ — только по ролям.</h3><div className="control-pattern"><ShieldCheck/><span>RLS</span></div></article>
         <article className="control-card control-yellow" data-reveal="card" style={{ '--reveal-delay': '110ms' }}><h3>Команда видит только<br/>разрешённую информацию.</h3><div className="chat-stack"><span>Нужен доступ?</span><span>Только просмотр.</span></div></article>
@@ -401,7 +431,7 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
       </div>
     </section>
 
-    <section className="story-section story-final">
+    <section className="story-section story-final" data-scene="final">
       <small data-reveal="final">Больше, чем реестр.</small>
       <h2 data-reveal="final" style={{ '--reveal-delay': '90ms' }}>Начните.<br/>Добавьте <span className="final-mark"><Package/></span> запрос.</h2>
       {canEdit && <button className="secondary" data-reveal="final" style={{ '--reveal-delay': '180ms' }} onClick={onAdd}>Создать новый запрос <ArrowRight size={16}/></button>}
