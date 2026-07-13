@@ -132,8 +132,10 @@ function applyVisibility(panel, list, rows) {
 
   const button = footer.querySelector('.analytics-category-toggle')
   if (button) {
-    button.textContent = expanded ? 'Свернуть категории' : `Показать все категории · ${rows.length}`
-    button.setAttribute('aria-expanded', String(expanded))
+    const nextLabel = expanded ? 'Свернуть категории' : `Показать все категории · ${rows.length}`
+    const nextExpanded = String(expanded)
+    if (button.textContent !== nextLabel) button.textContent = nextLabel
+    if (button.getAttribute('aria-expanded') !== nextExpanded) button.setAttribute('aria-expanded', nextExpanded)
   }
 }
 
