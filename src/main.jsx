@@ -478,7 +478,7 @@ function RequestCycleEditor({ row, onToggle, onDateChange }) {
         <button type="button" className="check" disabled={stage.fixed} aria-label={`${done ? 'Снять отметку' : 'Отметить'}: ${stage.label}`} onClick={() => onToggle(stage, !done)}>{done ? <Check size={14}/> : index + 1}</button>
         <b>{stage.label}</b>
         {stage.dateKey
-          ? <input type="date" aria-label={`Дата этапа: ${stage.label}`} value={row[stage.dateKey] || ''} onChange={event => onDateChange(stage, event.target.value)}/>
+          ? <input type="date" required={stage.fixed} aria-label={`Дата этапа: ${stage.label}`} value={row[stage.dateKey] || ''} onChange={event => onDateChange(stage, event.target.value)}/>
           : <span>{done ? 'Внесено' : 'Не внесено'}</span>}
       </div>
     })}
@@ -868,6 +868,10 @@ function RequestDetail({ row, onClose, onEdit, onSaveInline, canEdit }) {
   }
 
   async function saveInline() {
+    if (!draft.request_sent_at) {
+      setError('Укажите дату отправки исходного запроса.')
+      return
+    }
     setBusy(true)
     setError('')
     try {

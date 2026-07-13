@@ -1447,7 +1447,8 @@ aside nav button { min-height: 46px; }
 .registry-filter-toolbar .search { min-height: 46px; }
 .registry-filter-grid { min-width: 0; display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)) auto; gap: 8px; }
 .registry-filter-grid .filter { min-width: 0; min-height: 46px; }
-.registry-filter-grid .filter select { min-width: 0; width: 100%; text-overflow: ellipsis; }
+.registry-filter-grid .filter svg { flex: 0 0 auto; }
+.registry-filter-grid .filter select { min-width: 0; width: auto; flex: 1 1 auto; text-overflow: ellipsis; }
 .filter-reset { min-height: 46px; padding: 0 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--line); border-radius: 15px; color: #8f4454; background: #fff3f4; font-size: 9px; white-space: nowrap; }
 .filter-reset:hover { border-color: #efbdc5; background: #ffe8eb; }
 .request-number-link { padding: 0; display: inline-flex; align-items: center; gap: 6px; border: 0; color: var(--aubergine); background: transparent; font-size: 11px; }
