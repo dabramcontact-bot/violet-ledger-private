@@ -293,6 +293,39 @@ textarea { resize: vertical; }
 .deal-outcome input { width: 17px; height: 17px; margin: 0; flex: 0 0 auto; accent-color: #9d3d52; }
 .deal-outcome.unsuccessful { border-color: rgba(157,61,82,.18); background: #fff0f1; }
 .deal-outcome.unsuccessful > div b { color: #9d3d52; }
+.workflow-checklist { margin: 22px 0; padding: 18px; border: 1px solid var(--line); border-radius: 24px; background: #f7f5f9; }
+.workflow-checklist-head { min-height: 58px; padding: 0 4px 14px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.workflow-checklist-head small { color: var(--periwinkle); font-size: 8px; letter-spacing: .08em; }
+.workflow-checklist-head h3 { margin: 6px 0 0; color: var(--aubergine); font-size: 22px; line-height: 1; font-weight: 360; }
+.workflow-checklist-head > strong { color: var(--aubergine); font-size: 30px; line-height: 1; font-weight: 350; letter-spacing: -.05em; }
+.workflow-checklist-head > strong span { color: var(--fog); font-size: 14px; }
+.workflow-group { margin-top: 9px; overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--paper); }
+.workflow-group summary { min-height: 68px; padding: 12px 15px; display: grid; grid-template-columns: 1fr minmax(110px, .45fr); align-items: center; gap: 16px; color: var(--aubergine); cursor: pointer; list-style: none; }
+.workflow-group summary::-webkit-details-marker { display: none; }
+.workflow-group summary b, .workflow-group summary small { display: block; }
+.workflow-group summary b { font-size: 12px; font-weight: 450; }
+.workflow-group summary small { margin-top: 4px; color: var(--fog); font-size: 8px; }
+.workflow-group-progress > span { display: block; margin-bottom: 7px; color: var(--fog); font-size: 9px; text-align: right; }
+.workflow-group-progress > i { height: 5px; display: block; overflow: hidden; border-radius: 99px; background: var(--bone); }
+.workflow-group-progress em { height: 100%; display: block; border-radius: inherit; background: linear-gradient(90deg, var(--periwinkle), #4a87f2); transition: width .35s ease; }
+.workflow-step-list { border-top: 1px solid var(--line); }
+.workflow-step { min-height: 53px; padding: 8px 13px; display: grid; grid-template-columns: 24px 28px 1fr 132px; align-items: center; gap: 8px; border-bottom: 1px solid var(--line); }
+.workflow-step:last-child { border-bottom: 0; }
+.workflow-step.done { background: rgba(226,223,254,.28); }
+.workflow-step .check { width: 23px; height: 23px; padding: 0; display: grid; place-items: center; border: 1px solid var(--line-strong); border-radius: 50%; color: var(--paper); background: var(--paper); }
+.workflow-step.done .check { border-color: var(--aubergine); background: var(--aubergine); }
+.workflow-step .check:disabled { cursor: default; opacity: 1; }
+.workflow-step-number { color: var(--fog); font-size: 9px; }
+.workflow-step > div b, .workflow-step > div small { display: block; }
+.workflow-step > div b { color: var(--aubergine); font-size: 10px; line-height: 1.3; font-weight: 400; }
+.workflow-step > div small { width: max-content; margin-top: 4px; padding: 3px 6px; border-radius: 999px; color: var(--aubergine); background: var(--lavender); font-size: 7px; }
+.workflow-step input { margin: 0; padding: 8px 9px; border-radius: 11px; font-size: 9px; }
+.workflow-step time { color: var(--fog); font-size: 9px; text-align: right; }
+.workflow-progress-pill { position: relative; min-width: 72px; height: 30px; padding: 0 10px; display: inline-flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 999px; color: var(--aubergine); background: var(--bone); }
+.workflow-progress-pill i { position: absolute; inset: 0 auto 0 0; width: var(--workflow-progress); background: rgba(171,159,242,.34); }
+.workflow-progress-pill b { position: relative; z-index: 1; font-size: 9px; font-weight: 450; }
+.workflow-progress-pill.complete { color: #167453; background: #ddf6ed; }
+.workflow-progress-pill.complete i { background: rgba(22,116,83,.1); }
 .global-error { margin: 0 0 24px; }
 .logistics-modal { width: min(660px, 100%); }
 .logistics-form-grid { margin-bottom: 20px; padding: 18px; border-radius: 20px; background: var(--bone); }
@@ -391,6 +424,11 @@ textarea { resize: vertical; }
   .filter select { width: 100%; }
   .form-grid { grid-template-columns: 1fr; }
   .deal-outcome { grid-template-columns: 1fr; }
+  .workflow-checklist { padding: 12px; border-radius: 20px; }
+  .workflow-group summary { grid-template-columns: 1fr; gap: 8px; }
+  .workflow-group-progress > span { text-align: left; }
+  .workflow-step { grid-template-columns: 24px 24px 1fr; }
+  .workflow-step input, .workflow-step time { grid-column: 3 / -1; width: 100%; text-align: left; }
   .full { grid-column: auto; }
   .mission-orbit { grid-template-columns: 1fr; gap: 16px; }
   .mission-orbit > i { width: 1px; height: 34px; justify-self: center; }
