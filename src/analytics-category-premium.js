@@ -220,6 +220,9 @@ function buildHeader(panel, rows) {
 
   const totalProducts = rows.reduce((sum, row) => sum + parseNumber(row.querySelector(':scope > strong')?.textContent), 0)
   const leaderName = rows[0]?.querySelector('b')?.textContent?.trim() || 'Нет данных'
+  const signature = `${rows.length}|${leaderName}|${totalProducts}`
+  if (summary.dataset.signature === signature) return
+  summary.dataset.signature = signature
   summary.replaceChildren(
     make('span', '', `${rows.length} ${plural(rows.length, 'категория', 'категории', 'категорий')}`),
     make('span', '', `Лидер · ${leaderName}`),
@@ -229,7 +232,10 @@ function buildHeader(panel, rows) {
 
 function applyVisibility(panel, list, rows) {
   const expanded = panel.dataset.categoryExpanded === 'true'
-  rows.forEach((row, index) => { row.hidden = !expanded && index >= VISIBLE_LIMIT })
+  rows.forEach((row, index) => {
+    const nextHidden = !expanded && index >= VISIBLE_LIMIT
+    if (row.hidden !== nextHidden) row.hidden = nextHidden
+  })
 
   let footer = panel.querySelector(':scope > .analytics-category-footer')
   if (rows.length <= VISIBLE_LIMIT) {
@@ -250,7 +256,7 @@ function applyVisibility(panel, list, rows) {
   const button = footer.querySelector('.analytics-category-toggle')
   const label = expanded ? 'Свернуть категории' : `Показать все · ${rows.length}`
   if (button.textContent !== label) button.textContent = label
-  button.setAttribute('aria-expanded', String(expanded))
+  if (button.getAttribute('aria-expanded') !== String(expanded)) button.setAttribute('aria-expanded', String(expanded))
 }
 
 function enhanceCategoryPanel(list) {
