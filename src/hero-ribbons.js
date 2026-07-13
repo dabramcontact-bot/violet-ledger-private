@@ -1,16 +1,36 @@
-// Fast morphing ribbon field for the Violet Ledger home screen.
-// One low-resolution canvas recreates the rapid ribbon-to-blob motion from the reference video.
+// Choreographed canvas background for the Violet Ledger home screen.
+// The scene follows the reference video: fast crossing ribbons, a central pinch,
+// a short overlapping-blob composition, then a clean release into the next cycle.
 
 const instances = new WeakMap()
 const records = new Set()
 
-const PALETTE = [
-  'rgba(116, 101, 158, .68)',
-  'rgba(49, 91, 159, .66)',
-  'rgba(155, 87, 63, .62)',
-  'rgba(23, 99, 79, .66)',
-  'rgba(173, 142, 84, .54)',
-  'rgba(97, 78, 157, .64)',
+const COLORS = {
+  violet: 'rgba(116, 101, 158, .72)',
+  blue: 'rgba(49, 91, 159, .72)',
+  rust: 'rgba(155, 87, 63, .68)',
+  green: 'rgba(23, 99, 79, .70)',
+  gold: 'rgba(173, 142, 84, .60)',
+  plum: 'rgba(97, 78, 157, .70)',
+  stone: 'rgba(151, 137, 133, .70)',
+  graphite: 'rgba(91, 93, 105, .34)',
+}
+
+const RIBBON_PRESETS = [
+  { color: COLORS.violet, width: 66, fromLeft: true,  y0: .02, y1: .84, bend: -.13, phase: .15 },
+  { color: COLORS.blue,   width: 72, fromLeft: true,  y0: .26, y1: .70, bend:  .10, phase: .82 },
+  { color: COLORS.rust,   width: 78, fromLeft: false, y0: .07, y1: .77, bend: -.07, phase: 1.45 },
+  { color: COLORS.green,  width: 64, fromLeft: false, y0: .16, y1: .57, bend:  .14, phase: 2.10 },
+  { color: COLORS.gold,   width: 58, fromLeft: true,  y0: .36, y1: .88, bend: -.16, phase: 2.72 },
+  { color: COLORS.plum,   width: 70, fromLeft: false, y0: .30, y1: .92, bend:  .08, phase: 3.35 },
+]
+
+const BLOB_PRESETS = [
+  { color: COLORS.rust,   x: .19, y: .49, rx: .28, ry: .36, rotation: -.18, from: -1.0 },
+  { color: '#231a35',     x: .36, y: .61, rx: .25, ry: .31, rotation:  .12, from: -1.0 },
+  { color: COLORS.violet, x: .54, y: .49, rx: .16, ry: .24, rotation: -.08, from:  0.0 },
+  { color: COLORS.stone,  x: .67, y: .55, rx: .18, ry: .24, rotation:  .18, from:  1.0 },
+  { color: COLORS.green,  x: .86, y: .48, rx: .22, ry: .29, rotation: -.10, from:  1.0 },
 ]
 
 const clamp01 = value => Math.max(0, Math.min(1, value))
@@ -22,6 +42,7 @@ const smoothstep = (from, to, value) => {
 const easeInOutCubic = value => value < .5
   ? 4 * value * value * value
   : 1 - Math.pow(-2 * value + 2, 3) / 2
+const easeOutCubic = value => 1 - Math.pow(1 - clamp01(value), 3)
 
 function supportsReducedMotion() {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -49,11 +70,13 @@ function attachRibbonCanvas(hero) {
 
   const reduced = supportsReducedMotion()
   const economical = lowPowerDevice()
-  const targetFps = reduced ? 8 : economical ? 22 : 30
-  const frameInterval = 1000 / targetFps
   const ribbonCount = reduced ? 4 : economical ? 5 : 6
-  const renderScale = reduced ? .55 : economical ? .62 : .78
-  const cycleDuration = reduced ? 8.4 : economical ? 5.7 : 4.7
+  const ribbons = RIBBON_PRESETS.slice(0, ribbonCount)
+
+  let targetFps = reduced ? 8 : economical ? 20 : 28
+  let frameInterval = 1000 / targetFps
+  let renderScale = reduced ? .48 : economical ? .54 : .68
+  const cycleDuration = reduced ? 9.5 : economical ? 6.1 : 5.25
 
   let width = 1
   let height = 1
@@ -62,26 +85,13 @@ function attachRibbonCanvas(hero) {
   let lastFrame = 0
   let visible = true
   let destroyed = false
-  let rect = hero.getBoundingClientRect()
   let record = null
   let epoch = performance.now()
-
-  const ribbons = Array.from({ length: ribbonCount }, (_, index) => ({
-    color: PALETTE[index % PALETTE.length],
-    width: 54 + index * 10,
-    baseY: .12 + index * (ribbonCount > 1 ? .76 / (ribbonCount - 1) : 0),
-    speed: .84 + index * .095,
-    phase: index * 1.31,
-    amplitude: .10 + (index % 3) * .025,
-    drift: .11 + (index % 2) * .045,
-    tilt: (index % 2 ? -1 : 1) * (.08 + index * .01),
-    blobX: ribbonCount === 1 ? .5 : .12 + index * (.76 / (ribbonCount - 1)),
-    blobY: .49 + ((index % 3) - 1) * .085,
-    blobSize: .12 + (index % 3) * .025,
-  }))
+  let slowFrameStreak = 0
+  let qualityReduced = false
 
   function resize() {
-    rect = hero.getBoundingClientRect()
+    const rect = hero.getBoundingClientRect()
     width = Math.max(1, Math.round(rect.width))
     height = Math.max(1, Math.round(rect.height))
     scale = Math.min(1, renderScale)
@@ -100,105 +110,187 @@ function attachRibbonCanvas(hero) {
   function sceneState(time) {
     const progress = ((time / cycleDuration) % 1 + 1) % 1
 
-    // The reference video spends most of the time in fast ribbon flight,
-    // then quickly folds the ribbons into overlapping discs and releases them again.
-    const foldIn = smoothstep(.48, .66, progress)
-    const foldOut = smoothstep(.82, .98, progress)
-    const blobMix = clamp01(foldIn * (1 - foldOut))
-    const compression = easeInOutCubic(blobMix)
-    const launch = smoothstep(.08, .48, progress) * (1 - smoothstep(.55, .70, progress))
-    const release = smoothstep(.86, 1, progress)
+    // 0.00–0.50: ribbons cross and accelerate through the pinch point.
+    // 0.46–0.66: the field tightens and the foreground ribbon sweeps across.
+    // 0.58–0.84: overlapping circles take over the composition.
+    // 0.82–1.00: circles leave and ribbons re-enter for a seamless restart.
+    const attraction = smoothstep(.08, .44, progress) * (1 - smoothstep(.54, .66, progress))
+    const sweep = smoothstep(.25, .47, progress) * (1 - smoothstep(.56, .66, progress))
+    const blobIn = smoothstep(.54, .68, progress)
+    const blobOut = smoothstep(.82, .97, progress)
+    const blobMix = clamp01(blobIn * (1 - blobOut))
+    const release = smoothstep(.84, 1, progress)
+    const restartPulse = Math.sin(release * Math.PI)
+    const ribbonAlpha = clamp01(1 - smoothstep(.56, .71, progress) * .82 + release * .82)
 
-    return { progress, blobMix, compression, launch, release }
+    return {
+      progress,
+      attraction: easeInOutCubic(attraction),
+      sweep,
+      blobMix: easeInOutCubic(blobMix),
+      release,
+      restartPulse,
+      ribbonAlpha,
+    }
+  }
+
+  function drawMutedBackLines(time, state) {
+    if (economical || reduced) return
+
+    const pinchX = width * (.54 + Math.sin(time * .38) * .025)
+    const pinchY = height * (.47 + Math.cos(time * .32) * .035)
+    ctx.globalAlpha = .24 * (1 - state.blobMix * .55)
+    ctx.strokeStyle = COLORS.graphite
+    ctx.lineCap = 'round'
+
+    for (let index = 0; index < 2; index += 1) {
+      const direction = index === 0 ? 1 : -1
+      const baseY = height * (.22 + index * .56)
+      ctx.beginPath()
+      ctx.moveTo(direction > 0 ? -width * .18 : width * 1.18, baseY)
+      ctx.bezierCurveTo(
+        width * (.18 + index * .05),
+        baseY + direction * height * .18,
+        pinchX,
+        pinchY + direction * height * .24,
+        direction > 0 ? width * 1.18 : -width * .18,
+        height * (.76 - index * .52),
+      )
+      ctx.lineWidth = (38 + index * 12) * (height / 820)
+      ctx.stroke()
+    }
+    ctx.globalAlpha = 1
   }
 
   function drawRibbon(ribbon, index, time, state) {
-    const phase = time * ribbon.speed + ribbon.phase
-    const secondary = time * (ribbon.speed * .73) + ribbon.phase * .69
-    const direction = index % 2 ? -1 : 1
+    const direction = ribbon.fromLeft ? 1 : -1
+    const phase = time * (1.10 + index * .055) + ribbon.phase
+    const pulse = Math.sin(phase)
+    const pulse2 = Math.cos(phase * .79 + ribbon.phase)
 
-    const flightX = (
-      Math.sin(phase * .92) * ribbon.drift +
-      Math.cos(secondary * .51) * ribbon.drift * .54
-    ) * width
-    const launchX = direction * state.launch * width * (.18 + index * .012)
-    const releaseX = -direction * state.release * width * .14
-    const horizontalFlight = flightX + launchX + releaseX
+    const pinchX = width * (.55 + Math.sin(time * .44) * .035)
+    const pinchY = height * (.47 + Math.cos(time * .39) * .045)
 
-    const baseY = height * ribbon.baseY
-    const wave = Math.sin(phase * 1.08) * height * ribbon.amplitude
-    const flutter = Math.cos(secondary * 1.27) * height * .06
+    const startX = ribbon.fromLeft ? -width * .30 : width * 1.30
+    const endX = ribbon.fromLeft ? width * 1.30 : -width * .30
+    const startY = height * (ribbon.y0 + pulse * .055)
+    const endY = height * (ribbon.y1 - pulse2 * .060)
 
-    const fullStartX = -width * .38 + horizontalFlight
-    const fullEndX = width * 1.38 + horizontalFlight
-    const fullStartY = baseY + wave + flutter
-    const fullEndY = baseY - wave + Math.sin(secondary * 1.17) * height * .07
-    const fullCp1X = width * (.15 + Math.sin(secondary * .91) * .16) + horizontalFlight
-    const fullCp2X = width * (.85 + Math.cos(secondary * .83) * .16) + horizontalFlight
-    const fullCp1Y = baseY + height * (ribbon.tilt + Math.sin(phase * 1.34) * .28)
-    const fullCp2Y = baseY + height * (-ribbon.tilt + Math.cos(phase * 1.11) * .28)
+    const travellingShift = Math.sin(phase * .67) * width * (.055 + index * .007)
+    const restartShift = state.restartPulse * direction * width * (.14 + index * .008)
+    const sweepShift = (index === 2 ? state.sweep * direction * width * .18 : 0)
+    const shiftX = travellingShift + restartShift + sweepShift
 
-    const blobOrbit = time * (.52 + index * .035) + ribbon.phase
-    const blobCenterX = width * ribbon.blobX + Math.sin(blobOrbit) * width * .035
-    const blobCenterY = height * ribbon.blobY + Math.cos(blobOrbit * .83) * height * .045
-    const blobRadius = Math.min(width, height) * ribbon.blobSize
-    const capsuleLength = blobRadius * (.42 + .12 * Math.sin(blobOrbit * 1.3))
-    const capsuleTilt = direction * (.32 + .12 * Math.cos(blobOrbit))
-    const capsuleDx = Math.cos(capsuleTilt) * capsuleLength
-    const capsuleDy = Math.sin(capsuleTilt) * capsuleLength
+    const attraction = .58 + state.attraction * .30
+    const cp1X = lerp(startX, pinchX, attraction) + shiftX
+    const cp2X = lerp(endX, pinchX, attraction) + shiftX
+    const cp1Y = lerp(startY, pinchY, attraction) + height * (ribbon.bend + pulse2 * .11)
+    const cp2Y = lerp(endY, pinchY, attraction) - height * (ribbon.bend + pulse * .11)
 
-    const blobStartX = blobCenterX - capsuleDx
-    const blobStartY = blobCenterY - capsuleDy
-    const blobEndX = blobCenterX + capsuleDx
-    const blobEndY = blobCenterY + capsuleDy
-    const blobCp1X = blobCenterX - capsuleDx * .28
-    const blobCp1Y = blobCenterY - capsuleDy * .28
-    const blobCp2X = blobCenterX + capsuleDx * .28
-    const blobCp2Y = blobCenterY + capsuleDy * .28
-
-    const mix = state.compression
-    const startX = lerp(fullStartX, blobStartX, mix)
-    const startY = lerp(fullStartY, blobStartY, mix)
-    const endX = lerp(fullEndX, blobEndX, mix)
-    const endY = lerp(fullEndY, blobEndY, mix)
-    const cp1X = lerp(fullCp1X, blobCp1X, mix)
-    const cp1Y = lerp(fullCp1Y, blobCp1Y, mix)
-    const cp2X = lerp(fullCp2X, blobCp2X, mix)
-    const cp2Y = lerp(fullCp2Y, blobCp2Y, mix)
-
-    const ribbonWidth = ribbon.width * (height / 820)
-    const blobWidth = blobRadius * (1.45 + (index % 2) * .18)
+    const collapse = state.blobMix
+    const collapsedStartX = pinchX - direction * width * (.08 + index * .004)
+    const collapsedEndX = pinchX + direction * width * (.08 + index * .004)
+    const collapsedY = pinchY + (index - (ribbons.length - 1) / 2) * height * .017
 
     ctx.beginPath()
-    ctx.moveTo(startX, startY)
-    ctx.bezierCurveTo(cp1X, cp1Y, cp2X, cp2Y, endX, endY)
+    ctx.moveTo(
+      lerp(startX + shiftX, collapsedStartX, collapse),
+      lerp(startY, collapsedY, collapse),
+    )
+    ctx.bezierCurveTo(
+      lerp(cp1X, pinchX, collapse),
+      lerp(cp1Y, collapsedY, collapse),
+      lerp(cp2X, pinchX, collapse),
+      lerp(cp2Y, collapsedY, collapse),
+      lerp(endX + shiftX, collapsedEndX, collapse),
+      lerp(endY, collapsedY, collapse),
+    )
+
     ctx.strokeStyle = ribbon.color
-    ctx.lineWidth = lerp(ribbonWidth, blobWidth, mix)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
-    ctx.globalAlpha = lerp(.94, .88, state.blobMix)
+    const baseWidth = ribbon.width * (height / 820)
+    const foregroundBoost = index === 2 ? state.sweep * 48 * (height / 820) : 0
+    ctx.lineWidth = lerp(baseWidth + foregroundBoost, baseWidth * 1.25, collapse)
+    ctx.globalAlpha = state.ribbonAlpha * (index === 2 ? 1 : .90)
     ctx.stroke()
+    ctx.globalAlpha = 1
+  }
 
-    // A lightweight ellipse makes the compressed phase read as large overlapping circles,
-    // while the capsule above preserves the impression that the ribbons are morphing into them.
-    if (state.blobMix > .02) {
-      const ellipseAlpha = smoothstep(.08, .72, state.blobMix) * .48
+  function drawBlobs(time, state) {
+    if (state.blobMix <= .005) return
+
+    const clusterTravel = easeOutCubic(state.blobMix)
+    const exit = state.release
+
+    for (let index = 0; index < BLOB_PRESETS.length; index += 1) {
+      if (economical && index === 2) continue
+      const blob = BLOB_PRESETS[index]
+      const delay = index * .018
+      const localIn = smoothstep(.02 + delay, .70 + delay, state.blobMix)
+      const localOut = smoothstep(.18 + delay, 1, exit)
+      const appear = clamp01(localIn * (1 - localOut))
+      if (appear <= .003) continue
+
+      const targetX = width * blob.x
+      const targetY = height * blob.y
+      const sourceX = width * (.52 + blob.from * .48)
+      const sourceY = height * (.48 + ((index % 2) ? .08 : -.06))
+      const drift = Math.sin(time * (.74 + index * .04) + index) * width * .012
+      const exitX = targetX + blob.from * width * .62
+      const exitY = targetY + ((index % 2) ? 1 : -1) * height * .10
+
+      const settledX = lerp(sourceX, targetX, clusterTravel) + drift
+      const settledY = lerp(sourceY, targetY, clusterTravel)
+      const x = lerp(settledX, exitX, localOut)
+      const y = lerp(settledY, exitY, localOut)
+      const scaleIn = easeOutCubic(localIn)
+      const scaleOut = 1 - easeInOutCubic(localOut)
+      const blobScale = scaleIn * scaleOut
+
+      ctx.save()
+      ctx.translate(x, y)
+      ctx.rotate(blob.rotation + Math.sin(time * .58 + index) * .035)
       ctx.beginPath()
       ctx.ellipse(
-        blobCenterX,
-        blobCenterY,
-        blobRadius * (1.05 + .08 * Math.sin(blobOrbit)),
-        blobRadius * (.82 + .08 * Math.cos(blobOrbit * .91)),
-        capsuleTilt,
+        0,
+        0,
+        width * blob.rx * blobScale,
+        height * blob.ry * blobScale,
+        0,
         0,
         Math.PI * 2,
       )
-      ctx.fillStyle = ribbon.color
-      ctx.globalAlpha = ellipseAlpha
+      ctx.fillStyle = blob.color
+      ctx.globalAlpha = .92 * appear
       ctx.fill()
+      ctx.restore()
+    }
+    ctx.globalAlpha = 1
+  }
+
+  function drawScene(time, state) {
+    drawMutedBackLines(time, state)
+
+    // Back-to-front ordering is deliberate: the reference uses dense overlaps,
+    // with one wide rust ribbon crossing in front of the entire field.
+    const order = ribbons.map((_, index) => index === 2 ? 999 : index)
+    order.sort((a, b) => a - b)
+    for (const value of order) {
+      const index = value === 999 ? 2 : value
+      drawRibbon(ribbons[index], index, time, state)
     }
 
-    ctx.globalAlpha = 1
+    drawBlobs(time, state)
+  }
+
+  function reduceQuality() {
+    if (qualityReduced || reduced) return
+    qualityReduced = true
+    renderScale = Math.max(.46, renderScale * .80)
+    targetFps = Math.min(targetFps, economical ? 18 : 22)
+    frameInterval = 1000 / targetFps
+    resize()
   }
 
   function render(now) {
@@ -210,14 +302,14 @@ function attachRibbonCanvas(hero) {
     }
     lastFrame = now
 
+    const drawStarted = performance.now()
     ctx.clearRect(0, 0, width, height)
     const time = (now - epoch) / 1000
-    const state = sceneState(time)
+    drawScene(time, sceneState(time))
 
-    // Draw from back to front. No shadows, filters or per-frame gradients.
-    for (let index = 0; index < ribbons.length; index += 1) {
-      drawRibbon(ribbons[index], index, time, state)
-    }
+    const drawCost = performance.now() - drawStarted
+    slowFrameStreak = drawCost > 13 ? slowFrameStreak + 1 : Math.max(0, slowFrameStreak - 1)
+    if (slowFrameStreak >= 8) reduceQuality()
 
     raf = requestAnimationFrame(render)
   }
@@ -272,14 +364,27 @@ function attachRibbonCanvas(hero) {
   start()
 }
 
-function scan() {
+function attachFromNode(node) {
+  if (!(node instanceof Element)) return
+  if (node.matches('.animated-hero.brand-hero')) attachRibbonCanvas(node)
+  node.querySelectorAll?.('.animated-hero.brand-hero').forEach(attachRibbonCanvas)
+}
+
+function cleanupDisconnected() {
   records.forEach(record => {
     if (!record.hero.isConnected) record.destroy()
   })
-  document.querySelectorAll('.animated-hero.brand-hero').forEach(attachRibbonCanvas)
 }
 
-scan()
+const root = document.getElementById('root') || document.body
+attachFromNode(root)
 
-const observer = new MutationObserver(scan)
-observer.observe(document.documentElement, { childList: true, subtree: true })
+// Inspect only newly inserted nodes instead of rescanning the whole document
+// after every React update. This removes a significant source of avoidable work.
+const observer = new MutationObserver(mutations => {
+  for (const mutation of mutations) {
+    mutation.addedNodes.forEach(attachFromNode)
+  }
+  cleanupDisconnected()
+})
+observer.observe(root, { childList: true, subtree: true })
