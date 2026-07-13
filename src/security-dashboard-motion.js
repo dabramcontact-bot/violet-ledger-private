@@ -27,8 +27,15 @@ function pulseNumber(node) {
   })
 }
 
+function prepareAuditItems(root) {
+  root?.querySelectorAll?.('.security-audit-item').forEach(item => {
+    item.style.position = 'relative'
+  })
+}
+
 function pulseLiveUpdate() {
   if (!activeShell || reducedMotion.matches || !sectionVisible) return
+  prepareAuditItems(activeShell)
   window.clearTimeout(liveTimer)
   activeShell.classList.remove('security-live-update')
   requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -54,6 +61,8 @@ function observeContent(shell) {
       if (target?.closest?.('.security-audit-list')) auditChanged = true
       record.addedNodes?.forEach(node => {
         if (node.nodeType !== Node.ELEMENT_NODE) return
+        if (node.matches?.('.security-audit-item')) node.style.position = 'relative'
+        prepareAuditItems(node)
         if (node.matches?.('.security-audit-item') || node.querySelector?.('.security-audit-item')) auditChanged = true
       })
     })
@@ -84,6 +93,7 @@ function connect(section, shell) {
   activeSection = section
   activeShell = shell
   shell.classList.add('security-motion-ready')
+  prepareAuditItems(shell)
 
   if (reducedMotion.matches) shell.classList.add('has-security-entered')
 
