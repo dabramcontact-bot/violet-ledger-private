@@ -1,0 +1,389 @@
+/* Lightweight motion layer for the premium security section.
+   All continuous effects are enabled only while the section is visible. */
+
+.security-premium-source::before {
+  inset: -6%;
+  will-change: transform;
+  transform: translate3d(0, 0, 0) scale(1.02);
+}
+
+.security-premium-source::after {
+  will-change: transform, opacity;
+  transform: translateX(-50%) scale(.94);
+}
+
+.security-premium-source.is-security-motion-active::before {
+  animation: security-grid-drift 18s ease-in-out infinite alternate;
+}
+
+.security-premium-source.is-security-motion-active::after {
+  animation: security-ambient-breathe 8s ease-in-out infinite;
+}
+
+@keyframes security-grid-drift {
+  0% { transform: translate3d(-1.4%, -1%, 0) scale(1.025); }
+  50% { transform: translate3d(1.2%, 1.1%, 0) scale(1.045); }
+  100% { transform: translate3d(2.2%, -.6%, 0) scale(1.035); }
+}
+
+@keyframes security-ambient-breathe {
+  0%, 100% { opacity: .72; transform: translateX(-50%) scale(.94); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.06); }
+}
+
+/* One-time section entrance. */
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-heading,
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-card,
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-footnote {
+  opacity: 0;
+}
+
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-heading {
+  transform: translateY(34px);
+}
+
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-card {
+  transform: translateY(58px) scale(.965);
+}
+
+.security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-footnote {
+  transform: translateY(18px);
+}
+
+.security-premium-shell.has-security-entered .security-premium-heading {
+  animation: security-heading-enter .9s cubic-bezier(.2,.76,.24,1) both;
+}
+
+.security-premium-shell.has-security-entered .security-premium-card {
+  animation: security-card-enter .95s cubic-bezier(.2,.76,.24,1) both;
+}
+
+.security-premium-shell.has-security-entered .security-premium-card:nth-child(1) { animation-delay: .12s; }
+.security-premium-shell.has-security-entered .security-premium-card:nth-child(2) { animation-delay: .23s; }
+.security-premium-shell.has-security-entered .security-premium-card:nth-child(3) { animation-delay: .34s; }
+
+.security-premium-shell.has-security-entered .security-premium-footnote {
+  animation: security-footnote-enter .7s ease .52s both;
+}
+
+@keyframes security-heading-enter {
+  from { opacity: 0; transform: translateY(34px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes security-card-enter {
+  from { opacity: 0; transform: translateY(58px) scale(.965); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes security-footnote-enter {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* A slow light pass across each card. */
+.security-premium-card::before {
+  content: '';
+  position: absolute;
+  z-index: 1;
+  top: -35%;
+  bottom: -35%;
+  left: -42%;
+  width: 28%;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-180%, 0, 0) rotate(13deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.33), transparent);
+  will-change: transform, opacity;
+}
+
+.security-premium-source.is-security-motion-active .security-premium-card::before {
+  animation: security-card-sheen 9s ease-in-out infinite;
+}
+
+.security-premium-source.is-security-motion-active .security-premium-card:nth-child(2)::before { animation-delay: -5.8s; }
+.security-premium-source.is-security-motion-active .security-premium-card:nth-child(3)::before { animation-delay: -2.7s; }
+
+@keyframes security-card-sheen {
+  0%, 58% { opacity: 0; transform: translate3d(-180%, 0, 0) rotate(13deg); }
+  65% { opacity: .38; }
+  82% { opacity: .08; transform: translate3d(620%, 0, 0) rotate(13deg); }
+  100% { opacity: 0; transform: translate3d(620%, 0, 0) rotate(13deg); }
+}
+
+/* Access card: independent depth layers and travelling signals. */
+.security-premium-source .security-layer,
+.security-premium-source .security-signal {
+  animation: none !important;
+}
+
+.security-premium-source.is-security-motion-active .layer-back {
+  animation: security-layer-back 7.8s ease-in-out infinite !important;
+}
+
+.security-premium-source.is-security-motion-active .layer-middle {
+  animation: security-layer-middle 6.8s ease-in-out -2.1s infinite !important;
+}
+
+.security-premium-source.is-security-motion-active .layer-front {
+  animation: security-layer-front 5.9s ease-in-out -1.2s infinite !important;
+}
+
+@keyframes security-layer-back {
+  0%, 100% { transform: perspective(500px) rotateY(-28deg) rotateX(8deg) translate3d(0, 2px, 0); }
+  50% { transform: perspective(500px) rotateY(-23deg) rotateX(5deg) translate3d(-4px, -7px, 0); }
+}
+
+@keyframes security-layer-middle {
+  0%, 100% { transform: perspective(500px) rotateY(-26deg) rotateX(7deg) translate3d(0, 0, 0); }
+  50% { transform: perspective(500px) rotateY(-20deg) rotateX(4deg) translate3d(3px, -10px, 0); }
+}
+
+@keyframes security-layer-front {
+  0%, 100% { transform: perspective(500px) rotateY(-25deg) rotateX(6deg) translate3d(0, 0, 0); }
+  50% { transform: perspective(500px) rotateY(-18deg) rotateX(3deg) translate3d(6px, -12px, 0); }
+}
+
+.security-layers::after {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  top: 2px;
+  bottom: 8px;
+  left: -42px;
+  width: 54px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate3d(-20px, 0, 0) skewX(-13deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.52), transparent);
+  will-change: transform, opacity;
+}
+
+.security-premium-source.is-security-motion-active .security-layers::after {
+  animation: security-layer-scan 6.4s ease-in-out infinite;
+}
+
+@keyframes security-layer-scan {
+  0%, 16% { opacity: 0; transform: translate3d(-20px, 0, 0) skewX(-13deg); }
+  24% { opacity: .55; }
+  58% { opacity: .12; transform: translate3d(470px, 0, 0) skewX(-13deg); }
+  100% { opacity: 0; transform: translate3d(470px, 0, 0) skewX(-13deg); }
+}
+
+.security-signal::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  opacity: 0;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(134,104,232,.14), 0 0 14px rgba(117,84,232,.7);
+  will-change: transform, opacity;
+}
+
+.security-premium-source.is-security-motion-active .security-signal::after {
+  animation: security-signal-travel 3.9s ease-in-out infinite;
+}
+
+.security-premium-source.is-security-motion-active .signal-two::after { animation-delay: -1.3s; }
+.security-premium-source.is-security-motion-active .signal-three::after { animation-delay: -2.6s; }
+
+@keyframes security-signal-travel {
+  0%, 12% { opacity: 0; transform: translateX(0); }
+  25% { opacity: 1; }
+  68% { opacity: .8; transform: translateX(56px); }
+  82%, 100% { opacity: 0; transform: translateX(62px); }
+}
+
+.security-premium-source.is-security-motion-active .security-role-tag {
+  animation: security-role-breathe 6.2s ease-in-out infinite;
+}
+.security-premium-source.is-security-motion-active .role-editor { animation-delay: -2.1s; }
+.security-premium-source.is-security-motion-active .role-viewer { animation-delay: -4.2s; }
+
+@keyframes security-role-breathe {
+  0%, 100% { transform: translateX(0); box-shadow: 0 12px 26px rgba(60,44,116,.07); }
+  50% { transform: translateX(4px); box-shadow: 0 16px 34px rgba(90,66,165,.12); }
+}
+
+/* Permissions card: bars receive a travelling highlight. */
+.security-permission-row em u {
+  position: relative;
+  overflow: hidden;
+}
+
+.security-permission-row em u::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  width: 34%;
+  opacity: 0;
+  transform: translateX(-150%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.9), transparent);
+  will-change: transform, opacity;
+}
+
+.security-premium-source.is-security-motion-active .security-permission-row em u::after {
+  animation: security-permission-shimmer 4.6s ease-in-out infinite;
+}
+.security-premium-source.is-security-motion-active .security-permission-row:nth-child(2) em u::after { animation-delay: -1.55s; }
+.security-premium-source.is-security-motion-active .security-permission-row:nth-child(3) em u::after { animation-delay: -3.1s; }
+
+@keyframes security-permission-shimmer {
+  0%, 20% { opacity: 0; transform: translateX(-150%); }
+  35% { opacity: .85; }
+  68% { opacity: .12; transform: translateX(370%); }
+  100% { opacity: 0; transform: translateX(370%); }
+}
+
+.security-premium-source.is-security-motion-active .security-permission-row > i {
+  animation: security-permission-icon 5.4s ease-in-out infinite;
+}
+.security-premium-source.is-security-motion-active .security-permission-row:nth-child(2) > i { animation-delay: -1.8s; }
+.security-premium-source.is-security-motion-active .security-permission-row:nth-child(3) > i { animation-delay: -3.6s; }
+
+@keyframes security-permission-icon {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.04); }
+}
+
+/* Audit card: live scanner and staggered event insertion. */
+.security-audit-window {
+  overflow: hidden;
+}
+
+.security-audit-window::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  left: 12px;
+  right: 12px;
+  top: 0;
+  height: 1px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(14px);
+  background: linear-gradient(90deg, transparent, rgba(255,114,167,.72), transparent);
+  box-shadow: 0 0 12px rgba(255,114,167,.3);
+  will-change: transform, opacity;
+}
+
+.security-audit-window > * { position: relative; z-index: 1; }
+
+.security-premium-source.is-security-motion-active .security-audit-window::after {
+  animation: security-audit-scan 5.8s ease-in-out infinite;
+}
+
+@keyframes security-audit-scan {
+  0%, 10% { opacity: 0; transform: translateY(14px); }
+  24% { opacity: .55; }
+  66% { opacity: .15; transform: translateY(248px); }
+  100% { opacity: 0; transform: translateY(248px); }
+}
+
+.security-premium-source.is-security-motion-active .security-audit-window-head span svg {
+  animation: security-live-heartbeat 2.8s ease-in-out infinite;
+}
+
+@keyframes security-live-heartbeat {
+  0%, 100% { transform: scale(1); opacity: .72; }
+  42% { transform: scale(1.13); opacity: 1; }
+  54% { transform: scale(.96); }
+}
+
+.security-premium-source.is-security-motion-active .security-audit-item {
+  animation: security-audit-item-enter .48s cubic-bezier(.2,.76,.24,1) both;
+}
+.security-premium-source.is-security-motion-active .security-audit-item:nth-child(2) { animation-delay: .06s; }
+.security-premium-source.is-security-motion-active .security-audit-item:nth-child(3) { animation-delay: .12s; }
+.security-premium-source.is-security-motion-active .security-audit-item:nth-child(4) { animation-delay: .18s; }
+
+@keyframes security-audit-item-enter {
+  from { opacity: 0; transform: translateX(18px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.security-audit-item:first-child::after {
+  content: '';
+  position: absolute;
+  right: 7px;
+  top: 7px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  opacity: 0;
+  background: #ff72a7;
+}
+
+.security-premium-source.is-security-motion-active .security-audit-item:first-child::after {
+  animation: security-live-dot 2.2s ease-in-out infinite;
+}
+
+@keyframes security-live-dot {
+  0%, 100% { opacity: .25; box-shadow: 0 0 0 0 rgba(255,114,167,.28); }
+  50% { opacity: 1; box-shadow: 0 0 0 5px rgba(255,114,167,0); }
+}
+
+.security-premium-shell.security-live-update .security-audit-card {
+  animation: security-live-update .7s cubic-bezier(.2,.76,.24,1);
+}
+
+@keyframes security-live-update {
+  0% { transform: translateY(0); box-shadow: 0 30px 72px rgba(8,4,21,.22), inset 0 1px rgba(255,255,255,.8); }
+  45% { transform: translateY(-4px); box-shadow: 0 38px 82px rgba(239,91,154,.2), inset 0 1px rgba(255,255,255,.8); }
+  100% { transform: translateY(0); box-shadow: 0 30px 72px rgba(8,4,21,.22), inset 0 1px rgba(255,255,255,.8); }
+}
+
+/* Micro interaction for values updated by Supabase. */
+.security-number-updated {
+  animation: security-number-pop .52s cubic-bezier(.2,.76,.24,1);
+}
+
+@keyframes security-number-pop {
+  0% { transform: translateY(0) scale(1); }
+  45% { transform: translateY(-3px) scale(1.09); color: #7554e8; }
+  100% { transform: translateY(0) scale(1); }
+}
+
+.security-premium-source.is-security-motion-active .security-premium-footnote svg {
+  animation: security-lock-breathe 4.2s ease-in-out infinite;
+}
+
+@keyframes security-lock-breathe {
+  0%, 100% { transform: translateY(0); opacity: .56; }
+  50% { transform: translateY(-2px); opacity: .95; }
+}
+
+@media (max-width: 720px) {
+  .security-premium-card::before,
+  .security-layers::after,
+  .security-audit-window::after {
+    display: none;
+  }
+
+  .security-premium-source.is-security-motion-active .security-role-tag,
+  .security-premium-source.is-security-motion-active .security-permission-row > i {
+    animation-duration: 7s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .security-premium-source::before,
+  .security-premium-source::after,
+  .security-premium-shell *,
+  .security-premium-shell *::before,
+  .security-premium-shell *::after {
+    animation: none !important;
+    transition-duration: .01ms !important;
+  }
+
+  .security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-heading,
+  .security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-card,
+  .security-premium-shell.security-motion-ready:not(.has-security-entered) .security-premium-footnote {
+    opacity: 1;
+    transform: none;
+  }
+}
