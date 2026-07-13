@@ -1,0 +1,6 @@
+# Supabase Edge Functions configuration
+# payment-reminders accepts either an authenticated user JWT for manual tests
+# or a private x-cron-secret for scheduled runs.
+
+[functions.payment-reminders]
+verify_jwt = false
