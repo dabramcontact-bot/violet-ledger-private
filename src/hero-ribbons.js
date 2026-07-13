@@ -1,40 +1,42 @@
-// Choreographed canvas background for the Violet Ledger home screen.
-// The scene follows the reference video: fast crossing ribbons, a central pinch,
-// a short overlapping-blob composition, then a clean release into the next cycle.
+// Precision-choreographed canvas background for the Violet Ledger home screen.
+// The motion mirrors the supplied reference: fan -> stacked ribbons -> weave -> pinch -> giant discs -> pills -> restart.
 
 const instances = new WeakMap()
 const records = new Set()
 
-const COLORS = {
-  violet: 'rgba(116, 101, 158, .72)',
-  blue: 'rgba(49, 91, 159, .72)',
-  rust: 'rgba(155, 87, 63, .68)',
-  green: 'rgba(23, 99, 79, .70)',
-  gold: 'rgba(173, 142, 84, .60)',
-  plum: 'rgba(97, 78, 157, .70)',
-  stone: 'rgba(151, 137, 133, .70)',
-  graphite: 'rgba(91, 93, 105, .34)',
-}
+const COLORS = [
+  'rgba(116, 101, 158, .76)',
+  'rgba(45, 85, 156, .78)',
+  'rgba(159, 86, 57, .76)',
+  'rgba(22, 103, 78, .76)',
+  'rgba(176, 145, 67, .68)',
+  'rgba(96, 76, 151, .76)',
+  'rgba(155, 146, 142, .66)',
+  'rgba(72, 75, 87, .54)',
+]
 
 const RIBBON_PRESETS = [
-  { color: COLORS.violet, width: 66, fromLeft: true,  y0: .02, y1: .84, bend: -.13, phase: .15 },
-  { color: COLORS.blue,   width: 72, fromLeft: true,  y0: .26, y1: .70, bend:  .10, phase: .82 },
-  { color: COLORS.rust,   width: 78, fromLeft: false, y0: .07, y1: .77, bend: -.07, phase: 1.45 },
-  { color: COLORS.green,  width: 64, fromLeft: false, y0: .16, y1: .57, bend:  .14, phase: 2.10 },
-  { color: COLORS.gold,   width: 58, fromLeft: true,  y0: .36, y1: .88, bend: -.16, phase: 2.72 },
-  { color: COLORS.plum,   width: 70, fromLeft: false, y0: .30, y1: .92, bend:  .08, phase: 3.35 },
+  { color: COLORS[0], fromLeft: true,  y0: -.05, y1: .90, width: 76, phase: .10, bend: -.16 },
+  { color: COLORS[1], fromLeft: true,  y0:  .19, y1: .72, width: 82, phase: .72, bend:  .12 },
+  { color: COLORS[2], fromLeft: false, y0:  .03, y1: .79, width: 94, phase: 1.34, bend: -.08, foreground: true },
+  { color: COLORS[3], fromLeft: false, y0:  .14, y1: .58, width: 76, phase: 1.96, bend:  .16 },
+  { color: COLORS[4], fromLeft: true,  y0:  .35, y1: .91, width: 68, phase: 2.58, bend: -.18 },
+  { color: COLORS[5], fromLeft: false, y0:  .29, y1: .95, width: 80, phase: 3.20, bend:  .11 },
+  { color: COLORS[6], fromLeft: true,  y0:  .69, y1: .08, width: 60, phase: 3.82, bend: -.10 },
+  { color: COLORS[7], fromLeft: false, y0:  .82, y1: .21, width: 58, phase: 4.44, bend:  .09 },
 ]
 
 const BLOB_PRESETS = [
-  { color: COLORS.rust,   x: .19, y: .49, rx: .28, ry: .36, rotation: -.18, from: -1.0 },
-  { color: '#231a35',     x: .36, y: .61, rx: .25, ry: .31, rotation:  .12, from: -1.0 },
-  { color: COLORS.violet, x: .54, y: .49, rx: .16, ry: .24, rotation: -.08, from:  0.0 },
-  { color: COLORS.stone,  x: .67, y: .55, rx: .18, ry: .24, rotation:  .18, from:  1.0 },
-  { color: COLORS.green,  x: .86, y: .48, rx: .22, ry: .29, rotation: -.10, from:  1.0 },
+  { color: COLORS[2], sourceX: -0.35, giantX: .12, giantY: .53, giantRx: .31, giantRy: .43, pillX: .28, pillY: .55, pillRx: .075, pillRy: .105, exitX: -0.25 },
+  { color: '#211a32', sourceX: -0.20, giantX: .34, giantY: .60, giantRx: .27, giantRy: .34, pillX: .40, pillY: .48, pillRx: .060, pillRy: .090, exitX: -0.10 },
+  { color: COLORS[0], sourceX:  0.50, giantX: .53, giantY: .49, giantRx: .19, giantRy: .28, pillX: .52, pillY: .55, pillRx: .066, pillRy: .100, exitX:  0.48 },
+  { color: COLORS[6], sourceX:  1.14, giantX: .69, giantY: .56, giantRx: .21, giantRy: .29, pillX: .64, pillY: .48, pillRx: .071, pillRy: .095, exitX:  1.10 },
+  { color: COLORS[3], sourceX:  1.30, giantX: .88, giantY: .48, giantRx: .27, giantRy: .37, pillX: .76, pillY: .55, pillRx: .080, pillRy: .110, exitX:  1.24 },
 ]
 
 const clamp01 = value => Math.max(0, Math.min(1, value))
 const lerp = (from, to, amount) => from + (to - from) * amount
+const mixPoint = (a, b, amount) => ({ x: lerp(a.x, b.x, amount), y: lerp(a.y, b.y, amount) })
 const smoothstep = (from, to, value) => {
   const amount = clamp01((value - from) / Math.max(to - from, .0001))
   return amount * amount * (3 - 2 * amount)
@@ -43,6 +45,7 @@ const easeInOutCubic = value => value < .5
   ? 4 * value * value * value
   : 1 - Math.pow(-2 * value + 2, 3) / 2
 const easeOutCubic = value => 1 - Math.pow(1 - clamp01(value), 3)
+const easeInCubic = value => Math.pow(clamp01(value), 3)
 
 function supportsReducedMotion() {
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -52,6 +55,70 @@ function lowPowerDevice() {
   const cores = navigator.hardwareConcurrency || 4
   const memory = navigator.deviceMemory || 4
   return cores <= 4 || memory <= 4 || window.innerWidth < 820
+}
+
+function cubicPoint(geometry, t) {
+  const mt = 1 - t
+  const mt2 = mt * mt
+  const t2 = t * t
+  return {
+    x: geometry.p0.x * mt2 * mt + 3 * geometry.p1.x * mt2 * t + 3 * geometry.p2.x * mt * t2 + geometry.p3.x * t2 * t,
+    y: geometry.p0.y * mt2 * mt + 3 * geometry.p1.y * mt2 * t + 3 * geometry.p2.y * mt * t2 + geometry.p3.y * t2 * t,
+  }
+}
+
+function cubicDerivative(geometry, t) {
+  const mt = 1 - t
+  return {
+    x: 3 * mt * mt * (geometry.p1.x - geometry.p0.x) + 6 * mt * t * (geometry.p2.x - geometry.p1.x) + 3 * t * t * (geometry.p3.x - geometry.p2.x),
+    y: 3 * mt * mt * (geometry.p1.y - geometry.p0.y) + 6 * mt * t * (geometry.p2.y - geometry.p1.y) + 3 * t * t * (geometry.p3.y - geometry.p2.y),
+  }
+}
+
+function mixGeometry(a, b, amount) {
+  return {
+    p0: mixPoint(a.p0, b.p0, amount),
+    p1: mixPoint(a.p1, b.p1, amount),
+    p2: mixPoint(a.p2, b.p2, amount),
+    p3: mixPoint(a.p3, b.p3, amount),
+    w0: lerp(a.w0, b.w0, amount),
+    wm: lerp(a.wm, b.wm, amount),
+    w1: lerp(a.w1, b.w1, amount),
+  }
+}
+
+function ribbonWidthAt(geometry, t) {
+  const linear = lerp(geometry.w0, geometry.w1, t)
+  const middleDelta = geometry.wm - (geometry.w0 + geometry.w1) * .5
+  return Math.max(1, linear + Math.sin(Math.PI * t) * middleDelta)
+}
+
+function drawVariableRibbon(ctx, geometry, color, alpha, segments) {
+  if (alpha <= .002) return
+
+  const left = []
+  const right = []
+  for (let index = 0; index <= segments; index += 1) {
+    const t = index / segments
+    const point = cubicPoint(geometry, t)
+    const derivative = cubicDerivative(geometry, t)
+    const length = Math.hypot(derivative.x, derivative.y) || 1
+    const normalX = -derivative.y / length
+    const normalY = derivative.x / length
+    const halfWidth = ribbonWidthAt(geometry, t) * .5
+    left.push({ x: point.x + normalX * halfWidth, y: point.y + normalY * halfWidth })
+    right.push({ x: point.x - normalX * halfWidth, y: point.y - normalY * halfWidth })
+  }
+
+  ctx.beginPath()
+  ctx.moveTo(left[0].x, left[0].y)
+  for (let index = 1; index < left.length; index += 1) ctx.lineTo(left[index].x, left[index].y)
+  for (let index = right.length - 1; index >= 0; index -= 1) ctx.lineTo(right[index].x, right[index].y)
+  ctx.closePath()
+  ctx.fillStyle = color
+  ctx.globalAlpha = alpha
+  ctx.fill()
+  ctx.globalAlpha = 1
 }
 
 function attachRibbonCanvas(hero) {
@@ -70,14 +137,14 @@ function attachRibbonCanvas(hero) {
 
   const reduced = supportsReducedMotion()
   const economical = lowPowerDevice()
-  const ribbonCount = reduced ? 4 : economical ? 5 : 6
+  const ribbonCount = reduced ? 4 : economical ? 6 : 8
   const ribbons = RIBBON_PRESETS.slice(0, ribbonCount)
+  const cycleDuration = reduced ? 5.2 : economical ? 2.35 : 1.95
 
   let targetFps = reduced ? 8 : economical ? 20 : 28
   let frameInterval = 1000 / targetFps
-  let renderScale = reduced ? .48 : economical ? .54 : .68
-  const cycleDuration = reduced ? 9.5 : economical ? 6.1 : 5.25
-
+  let renderScale = reduced ? .44 : economical ? .50 : .62
+  let segmentCount = reduced ? 8 : economical ? 10 : 14
   let width = 1
   let height = 1
   let scale = 1
@@ -107,188 +174,200 @@ function attachRibbonCanvas(hero) {
     }
   }
 
-  function sceneState(time) {
-    const progress = ((time / cycleDuration) % 1 + 1) % 1
-
-    // 0.00–0.50: ribbons cross and accelerate through the pinch point.
-    // 0.46–0.66: the field tightens and the foreground ribbon sweeps across.
-    // 0.58–0.84: overlapping circles take over the composition.
-    // 0.82–1.00: circles leave and ribbons re-enter for a seamless restart.
-    const attraction = smoothstep(.08, .44, progress) * (1 - smoothstep(.54, .66, progress))
-    const sweep = smoothstep(.25, .47, progress) * (1 - smoothstep(.56, .66, progress))
-    const blobIn = smoothstep(.54, .68, progress)
-    const blobOut = smoothstep(.82, .97, progress)
-    const blobMix = clamp01(blobIn * (1 - blobOut))
-    const release = smoothstep(.84, 1, progress)
-    const restartPulse = Math.sin(release * Math.PI)
-    const ribbonAlpha = clamp01(1 - smoothstep(.56, .71, progress) * .82 + release * .82)
+  function fanScene(ribbon, index, time) {
+    const direction = ribbon.fromLeft ? 1 : -1
+    const wobble = Math.sin(time * 2.1 + ribbon.phase)
+    const wobble2 = Math.cos(time * 1.7 + ribbon.phase)
+    const startX = ribbon.fromLeft ? -width * .32 : width * 1.32
+    const endX = ribbon.fromLeft ? width * 1.32 : -width * .32
+    const centerX = width * (.54 + wobble * .025)
+    const centerY = height * (.47 + wobble2 * .035)
+    const baseWidth = ribbon.width * (height / 820)
 
     return {
-      progress,
-      attraction: easeInOutCubic(attraction),
-      sweep,
-      blobMix: easeInOutCubic(blobMix),
-      release,
-      restartPulse,
-      ribbonAlpha,
+      p0: { x: startX, y: height * (ribbon.y0 + wobble * .025) },
+      p1: { x: lerp(startX, centerX, .78), y: centerY + height * (ribbon.bend + wobble2 * .05) },
+      p2: { x: lerp(endX, centerX, .78), y: centerY - height * (ribbon.bend + wobble * .05) },
+      p3: { x: endX, y: height * (ribbon.y1 - wobble2 * .025) },
+      w0: baseWidth * 1.05,
+      wm: baseWidth * (.42 + index * .018),
+      w1: baseWidth * .95,
+      direction,
     }
   }
 
-  function drawMutedBackLines(time, state) {
-    if (economical || reduced) return
-
-    const pinchX = width * (.54 + Math.sin(time * .38) * .025)
-    const pinchY = height * (.47 + Math.cos(time * .32) * .035)
-    ctx.globalAlpha = .24 * (1 - state.blobMix * .55)
-    ctx.strokeStyle = COLORS.graphite
-    ctx.lineCap = 'round'
-
-    for (let index = 0; index < 2; index += 1) {
-      const direction = index === 0 ? 1 : -1
-      const baseY = height * (.22 + index * .56)
-      ctx.beginPath()
-      ctx.moveTo(direction > 0 ? -width * .18 : width * 1.18, baseY)
-      ctx.bezierCurveTo(
-        width * (.18 + index * .05),
-        baseY + direction * height * .18,
-        pinchX,
-        pinchY + direction * height * .24,
-        direction > 0 ? width * 1.18 : -width * .18,
-        height * (.76 - index * .52),
-      )
-      ctx.lineWidth = (38 + index * 12) * (height / 820)
-      ctx.stroke()
-    }
-    ctx.globalAlpha = 1
-  }
-
-  function drawRibbon(ribbon, index, time, state) {
+  function stackScene(ribbon, index, time) {
     const direction = ribbon.fromLeft ? 1 : -1
-    const phase = time * (1.10 + index * .055) + ribbon.phase
-    const pulse = Math.sin(phase)
-    const pulse2 = Math.cos(phase * .79 + ribbon.phase)
-
-    const pinchX = width * (.55 + Math.sin(time * .44) * .035)
-    const pinchY = height * (.47 + Math.cos(time * .39) * .045)
-
-    const startX = ribbon.fromLeft ? -width * .30 : width * 1.30
-    const endX = ribbon.fromLeft ? width * 1.30 : -width * .30
-    const startY = height * (ribbon.y0 + pulse * .055)
-    const endY = height * (ribbon.y1 - pulse2 * .060)
-
-    const travellingShift = Math.sin(phase * .67) * width * (.055 + index * .007)
-    const restartShift = state.restartPulse * direction * width * (.14 + index * .008)
-    const sweepShift = (index === 2 ? state.sweep * direction * width * .18 : 0)
-    const shiftX = travellingShift + restartShift + sweepShift
-
-    const attraction = .58 + state.attraction * .30
-    const cp1X = lerp(startX, pinchX, attraction) + shiftX
-    const cp2X = lerp(endX, pinchX, attraction) + shiftX
-    const cp1Y = lerp(startY, pinchY, attraction) + height * (ribbon.bend + pulse2 * .11)
-    const cp2Y = lerp(endY, pinchY, attraction) - height * (ribbon.bend + pulse * .11)
-
-    const collapse = state.blobMix
-    const collapsedStartX = pinchX - direction * width * (.08 + index * .004)
-    const collapsedEndX = pinchX + direction * width * (.08 + index * .004)
-    const collapsedY = pinchY + (index - (ribbons.length - 1) / 2) * height * .017
-
-    ctx.beginPath()
-    ctx.moveTo(
-      lerp(startX + shiftX, collapsedStartX, collapse),
-      lerp(startY, collapsedY, collapse),
-    )
-    ctx.bezierCurveTo(
-      lerp(cp1X, pinchX, collapse),
-      lerp(cp1Y, collapsedY, collapse),
-      lerp(cp2X, pinchX, collapse),
-      lerp(cp2Y, collapsedY, collapse),
-      lerp(endX + shiftX, collapsedEndX, collapse),
-      lerp(endY, collapsedY, collapse),
-    )
-
-    ctx.strokeStyle = ribbon.color
-    ctx.lineCap = 'round'
-    ctx.lineJoin = 'round'
+    const row = (index - (ribbons.length - 1) * .5)
+    const y = height * (.47 + row * .062)
+    const wave = Math.sin(time * 2.8 + ribbon.phase) * height * .055
+    const sweep = Math.cos(time * 2.2 + ribbon.phase) * width * .045
     const baseWidth = ribbon.width * (height / 820)
-    const foregroundBoost = index === 2 ? state.sweep * 48 * (height / 820) : 0
-    ctx.lineWidth = lerp(baseWidth + foregroundBoost, baseWidth * 1.25, collapse)
-    ctx.globalAlpha = state.ribbonAlpha * (index === 2 ? 1 : .90)
-    ctx.stroke()
-    ctx.globalAlpha = 1
+    const foregroundBoost = ribbon.foreground ? 1.32 : 1
+
+    return {
+      p0: { x: -width * .26 + sweep * direction, y: y + wave },
+      p1: { x: width * .22 + sweep, y: y - wave * 1.25 + row * 8 },
+      p2: { x: width * .78 + sweep, y: y + wave * 1.15 - row * 8 },
+      p3: { x: width * 1.26 + sweep * direction, y: y - wave * .72 },
+      w0: baseWidth * foregroundBoost,
+      wm: baseWidth * (1.08 + (index % 2) * .12) * foregroundBoost,
+      w1: baseWidth * .95 * foregroundBoost,
+    }
   }
 
-  function drawBlobs(time, state) {
-    if (state.blobMix <= .005) return
+  function weaveScene(ribbon, index, time) {
+    const direction = ribbon.fromLeft ? 1 : -1
+    const startX = ribbon.fromLeft ? -width * .34 : width * 1.34
+    const endX = ribbon.fromLeft ? width * 1.34 : -width * .34
+    const lane = (index - (ribbons.length - 1) * .5) / Math.max(1, ribbons.length - 1)
+    const pulse = Math.sin(time * 3.4 + ribbon.phase)
+    const pulse2 = Math.cos(time * 2.7 + ribbon.phase)
+    const baseWidth = ribbon.width * (height / 820)
 
-    const clusterTravel = easeOutCubic(state.blobMix)
-    const exit = state.release
+    return {
+      p0: { x: startX, y: height * (.20 + (index % 4) * .17 + pulse * .035) },
+      p1: { x: width * (.20 + direction * .05), y: height * (.76 - lane * .28 + pulse2 * .13) },
+      p2: { x: width * (.80 - direction * .05), y: height * (.24 + lane * .30 - pulse * .14) },
+      p3: { x: endX, y: height * (.78 - (index % 4) * .16 - pulse2 * .035) },
+      w0: baseWidth * .92,
+      wm: baseWidth * (ribbon.foreground ? 1.46 : 1.02),
+      w1: baseWidth * 1.04,
+    }
+  }
 
-    for (let index = 0; index < BLOB_PRESETS.length; index += 1) {
-      if (economical && index === 2) continue
+  function pinchScene(ribbon, index, time) {
+    const direction = ribbon.fromLeft ? 1 : -1
+    const startX = ribbon.fromLeft ? -width * .36 : width * 1.36
+    const endX = ribbon.fromLeft ? width * 1.36 : -width * .36
+    const pinchX = width * (.55 + Math.sin(time * 2.4) * .018)
+    const pinchY = height * (.49 + Math.cos(time * 2.1) * .022)
+    const ray = index - (ribbons.length - 1) * .5
+    const baseWidth = ribbon.width * (height / 820)
+
+    return {
+      p0: { x: startX, y: height * (.08 + (index % 5) * .20) },
+      p1: { x: pinchX - direction * width * .08, y: pinchY + ray * height * .012 },
+      p2: { x: pinchX + direction * width * .08, y: pinchY - ray * height * .012 },
+      p3: { x: endX, y: height * (.91 - (index % 5) * .19) },
+      w0: baseWidth * .76,
+      wm: baseWidth * .15,
+      w1: baseWidth * .70,
+    }
+  }
+
+  function collapsedScene(ribbon, index, time) {
+    const pinchX = width * (.55 + Math.sin(time * 2.3) * .012)
+    const pinchY = height * (.49 + Math.cos(time * 2.0) * .014)
+    const offset = (index - (ribbons.length - 1) * .5) * height * .010
+    const baseWidth = ribbon.width * (height / 820)
+    return {
+      p0: { x: pinchX - width * .075, y: pinchY + offset },
+      p1: { x: pinchX - width * .025, y: pinchY - offset },
+      p2: { x: pinchX + width * .025, y: pinchY + offset },
+      p3: { x: pinchX + width * .075, y: pinchY - offset },
+      w0: baseWidth * .20,
+      wm: baseWidth * .88,
+      w1: baseWidth * .20,
+    }
+  }
+
+  function sceneGeometry(ribbon, index, progress, time) {
+    const fan = fanScene(ribbon, index, time)
+    const stack = stackScene(ribbon, index, time)
+    const weave = weaveScene(ribbon, index, time)
+    const pinch = pinchScene(ribbon, index, time)
+    const collapsed = collapsedScene(ribbon, index, time)
+
+    if (progress < .18) return mixGeometry(fan, stack, easeInOutCubic(progress / .18))
+    if (progress < .43) return mixGeometry(stack, weave, easeInOutCubic((progress - .18) / .25))
+    if (progress < .63) return mixGeometry(weave, pinch, easeInOutCubic((progress - .43) / .20))
+    if (progress < .73) return mixGeometry(pinch, collapsed, easeInCubic((progress - .63) / .10))
+    if (progress < .90) return collapsed
+    return mixGeometry(collapsed, fan, easeOutCubic((progress - .90) / .10))
+  }
+
+  function ribbonOpacity(progress, ribbon) {
+    const fadeOut = smoothstep(.64, .75, progress)
+    const fadeIn = smoothstep(.90, .985, progress)
+    const base = clamp01(1 - fadeOut + fadeIn)
+    const foregroundPulse = ribbon.foreground ? 1 + Math.sin(clamp01((progress - .26) / .28) * Math.PI) * .10 : 1
+    return Math.min(1, base * foregroundPulse)
+  }
+
+  function drawRibbons(progress, time) {
+    const order = ribbons.map((_, index) => index).filter(index => !ribbons[index].foreground)
+    const foregroundIndex = ribbons.findIndex(ribbon => ribbon.foreground)
+    if (foregroundIndex >= 0) order.push(foregroundIndex)
+
+    for (const index of order) {
+      const ribbon = ribbons[index]
+      const geometry = sceneGeometry(ribbon, index, progress, time)
+      drawVariableRibbon(ctx, geometry, ribbon.color, ribbonOpacity(progress, ribbon), segmentCount)
+    }
+  }
+
+  function drawBlobs(progress, time) {
+    const giantIn = smoothstep(.66, .76, progress)
+    const exit = smoothstep(.92, .995, progress)
+    const visibleAmount = clamp01(giantIn * (1 - exit))
+    if (visibleAmount <= .002) return
+
+    const blobLimit = economical ? 4 : BLOB_PRESETS.length
+    for (let index = 0; index < blobLimit; index += 1) {
       const blob = BLOB_PRESETS[index]
       const delay = index * .018
-      const localIn = smoothstep(.02 + delay, .70 + delay, state.blobMix)
-      const localOut = smoothstep(.18 + delay, 1, exit)
-      const appear = clamp01(localIn * (1 - localOut))
-      if (appear <= .003) continue
+      const localIn = smoothstep(.66 + delay, .77 + delay, progress)
+      const localPill = smoothstep(.79 + delay, .91 + delay, progress)
+      const localExit = smoothstep(.92 + delay * .5, .995, progress)
+      const opacity = clamp01(localIn * (1 - localExit))
+      if (opacity <= .002) continue
 
-      const targetX = width * blob.x
-      const targetY = height * blob.y
-      const sourceX = width * (.52 + blob.from * .48)
-      const sourceY = height * (.48 + ((index % 2) ? .08 : -.06))
-      const drift = Math.sin(time * (.74 + index * .04) + index) * width * .012
-      const exitX = targetX + blob.from * width * .62
-      const exitY = targetY + ((index % 2) ? 1 : -1) * height * .10
+      const sourceX = width * blob.sourceX
+      const sourceY = height * (.49 + (index % 2 ? .09 : -.07))
+      const giantX = width * blob.giantX
+      const giantY = height * blob.giantY
+      const pillX = width * blob.pillX
+      const pillY = height * blob.pillY
+      const exitX = width * blob.exitX
+      const exitY = height * (blob.pillY + (index % 2 ? .12 : -.12))
 
-      const settledX = lerp(sourceX, targetX, clusterTravel) + drift
-      const settledY = lerp(sourceY, targetY, clusterTravel)
-      const x = lerp(settledX, exitX, localOut)
-      const y = lerp(settledY, exitY, localOut)
-      const scaleIn = easeOutCubic(localIn)
-      const scaleOut = 1 - easeInOutCubic(localOut)
-      const blobScale = scaleIn * scaleOut
+      const arrivedX = lerp(sourceX, giantX, easeOutCubic(localIn))
+      const arrivedY = lerp(sourceY, giantY, easeOutCubic(localIn))
+      const pillTargetX = lerp(arrivedX, pillX, easeInOutCubic(localPill))
+      const pillTargetY = lerp(arrivedY, pillY, easeInOutCubic(localPill))
+      const x = lerp(pillTargetX, exitX, easeInCubic(localExit))
+      const y = lerp(pillTargetY, exitY, easeInCubic(localExit))
+
+      const rx = lerp(width * blob.giantRx, width * blob.pillRx, easeInOutCubic(localPill)) * (1 - localExit * .45)
+      const ry = lerp(height * blob.giantRy, height * blob.pillRy, easeInOutCubic(localPill)) * (1 - localExit * .45)
+      const rotation = (index % 2 ? -.16 : .14) + Math.sin(time * 2.2 + index) * .025
 
       ctx.save()
       ctx.translate(x, y)
-      ctx.rotate(blob.rotation + Math.sin(time * .58 + index) * .035)
+      ctx.rotate(rotation)
       ctx.beginPath()
-      ctx.ellipse(
-        0,
-        0,
-        width * blob.rx * blobScale,
-        height * blob.ry * blobScale,
-        0,
-        0,
-        Math.PI * 2,
-      )
+      ctx.ellipse(0, 0, Math.max(1, rx), Math.max(1, ry), 0, 0, Math.PI * 2)
       ctx.fillStyle = blob.color
-      ctx.globalAlpha = .92 * appear
+      ctx.globalAlpha = opacity * .96
       ctx.fill()
       ctx.restore()
     }
     ctx.globalAlpha = 1
   }
 
-  function drawScene(time, state) {
-    drawMutedBackLines(time, state)
-
-    // Back-to-front ordering is deliberate: the reference uses dense overlaps,
-    // with one wide rust ribbon crossing in front of the entire field.
-    const order = ribbons.map((_, index) => index === 2 ? 999 : index)
-    order.sort((a, b) => a - b)
-    for (const value of order) {
-      const index = value === 999 ? 2 : value
-      drawRibbon(ribbons[index], index, time, state)
-    }
-
-    drawBlobs(time, state)
+  function drawScene(time) {
+    const progress = ((time / cycleDuration) % 1 + 1) % 1
+    drawRibbons(progress, time)
+    drawBlobs(progress, time)
   }
 
   function reduceQuality() {
     if (qualityReduced || reduced) return
     qualityReduced = true
-    renderScale = Math.max(.46, renderScale * .80)
-    targetFps = Math.min(targetFps, economical ? 18 : 22)
+    renderScale = Math.max(.42, renderScale * .78)
+    targetFps = Math.min(targetFps, economical ? 17 : 21)
+    segmentCount = Math.max(8, segmentCount - 3)
     frameInterval = 1000 / targetFps
     resize()
   }
@@ -304,12 +383,11 @@ function attachRibbonCanvas(hero) {
 
     const drawStarted = performance.now()
     ctx.clearRect(0, 0, width, height)
-    const time = (now - epoch) / 1000
-    drawScene(time, sceneState(time))
+    drawScene((now - epoch) / 1000)
 
     const drawCost = performance.now() - drawStarted
-    slowFrameStreak = drawCost > 13 ? slowFrameStreak + 1 : Math.max(0, slowFrameStreak - 1)
-    if (slowFrameStreak >= 8) reduceQuality()
+    slowFrameStreak = drawCost > 10 ? slowFrameStreak + 1 : Math.max(0, slowFrameStreak - 1)
+    if (slowFrameStreak >= 7) reduceQuality()
 
     raf = requestAnimationFrame(render)
   }
@@ -379,12 +457,8 @@ function cleanupDisconnected() {
 const root = document.getElementById('root') || document.body
 attachFromNode(root)
 
-// Inspect only newly inserted nodes instead of rescanning the whole document
-// after every React update. This removes a significant source of avoidable work.
 const observer = new MutationObserver(mutations => {
-  for (const mutation of mutations) {
-    mutation.addedNodes.forEach(attachFromNode)
-  }
+  for (const mutation of mutations) mutation.addedNodes.forEach(attachFromNode)
   cleanupDisconnected()
 })
 observer.observe(root, { childList: true, subtree: true })
