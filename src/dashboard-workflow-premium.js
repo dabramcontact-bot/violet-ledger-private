@@ -1,7 +1,7 @@
 /* Rebuild the dashboard's three-stage story without changing React data flow. */
 
 const SOURCE_SELECTOR = '.story-products'
-let sourceNode = null
+let observedDataNode = null
 let sourceObserver = null
 let rootFrame = 0
 
@@ -128,7 +128,10 @@ function createMarkup() {
 
 function updateShowcase(showcase, metrics) {
   const set = (name, value) => {
-    showcase.querySelectorAll(`[data-metric="${name}"]`).forEach(node => { node.textContent = String(value) })
+    const next = String(value)
+    showcase.querySelectorAll(`[data-metric="${name}"]`).forEach(node => {
+      if (node.textContent !== next) node.textContent = next
+    })
   }
   set('total', metrics.total)
   set('active', metrics.active)
@@ -140,15 +143,19 @@ function updateShowcase(showcase, metrics) {
   set('transit', metrics.inTransit)
   set('arrived', metrics.arrived)
   set('pi-note', metrics.piTotal ? `${metrics.signed} из ${metrics.piTotal} завершено · ${metrics.piProgress}%` : 'Пока нет активных PI')
-  showcase.querySelector('.premium-pi-ring')?.style.setProperty('--pi-progress', `${metrics.piProgress * 3.6}deg`)
+
+  const ring = showcase.querySelector('.premium-pi-ring')
+  const ringValue = `${metrics.piProgress * 3.6}deg`
+  if (ring?.style.getPropertyValue('--pi-progress') !== ringValue) ring?.style.setProperty('--pi-progress', ringValue)
 }
 
 function connectSourceObserver(source, showcase) {
-  if (sourceNode === source && sourceObserver) return
+  const dataNode = source.querySelector(':scope > .story-grid') || source
+  if (observedDataNode === dataNode && sourceObserver) return
   sourceObserver?.disconnect()
-  sourceNode = source
+  observedDataNode = dataNode
   sourceObserver = new MutationObserver(() => updateShowcase(showcase, readMetrics(source)))
-  sourceObserver.observe(source, { childList: true, subtree: true, characterData: true })
+  sourceObserver.observe(dataNode, { childList: true, subtree: true, characterData: true })
 }
 
 function ensureShowcase() {
