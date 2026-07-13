@@ -23,6 +23,19 @@ const EMPTY = {
   expected_warehouse_at: '', warehouse_arrived_at: ''
 }
 
+const AGENT_OPTIONS = [
+  'NINGBO RSG IMP&EXP CO.,LTD',
+  'ZHONGSHAN LINKTEX IMPORT & EXPORT CO., LTD',
+  'Ningbo White Stork Trade Co., Ltd.',
+  'Market Union Co., Ltd.',
+  'Union Source Co., Ltd.',
+  'TOP SHINE CO.,LTD',
+  'Union Service CO., LTD.',
+  'OFFICEMART STATIONERY CO.,LTD.',
+  'TAIZHOU XUSHENG OUTDOOR PRODUCTS CO.,LTD',
+  'NINGBO IHOME INTERNATIONAL TRADING CO., LTD'
+]
+
 const DATE_FIELDS = [
   'request_sent_at', 'offer_received_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at',
   'transit_started_at', 'expected_warehouse_at', 'warehouse_arrived_at'
@@ -810,7 +823,7 @@ function RequestModal({ value, onClose, onSave }) {
 
   return <div className="modal-backdrop"><div className="modal request-editor"><div className="modal-head"><div><div className="eyebrow"><Package size={14}/> КАРТОЧКА ЗАКУПКИ</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2><p>{value?.id ? `${form.request_number} · ${form.product_name}` : 'Добавьте основную информацию и отметьте текущий этап.'}</p></div><button aria-label="Закрыть" onClick={onClose}><X/></button></div><form onSubmit={submit}>
     <div className="request-editor-journey"><div><small>ТЕКУЩИЙ ПРОГРЕСС</small><b>{statusMeta[calcStatus(form)]?.[0]}</b></div><RequestJourney row={form} compact/></div>
-    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<input required value={form.agent_name} onChange={event => set('agent_name', event.target.value)} placeholder="Имя или компания"/></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
+    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<select required value={form.agent_name} onChange={event => set('agent_name', event.target.value)}><option value="" disabled>Выберите агента</option>{form.agent_name && !AGENT_OPTIONS.includes(form.agent_name) && <option value={form.agent_name}>{form.agent_name} · сохранённый</option>}{AGENT_OPTIONS.map(agent => <option key={agent} value={agent}>{agent}</option>)}</select></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
     <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
     <div className="stage-title"><span>ЛОГИСТИКА</span><small>CHINA → TRANSIT → WAREHOUSE</small></div>
     <div className="form-grid logistics-form-grid">
