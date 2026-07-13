@@ -2,6 +2,7 @@
 // One canvas replaces multiple large animated DOM layers to keep the hero fluid.
 
 const instances = new WeakMap()
+const records = new Set()
 
 const PALETTE = [
   'rgba(116, 101, 158, .64)',
@@ -56,6 +57,7 @@ function attachRibbonCanvas(hero) {
   let pointerX = 0
   let pointerY = 0
   let rect = hero.getBoundingClientRect()
+  let record = null
 
   const ribbons = Array.from({ length: ribbonCount }, (_, index) => ({
     color: PALETTE[index % PALETTE.length],
@@ -129,18 +131,14 @@ function attachRibbonCanvas(hero) {
 
     ctx.clearRect(0, 0, width, height)
     const time = now / 1000
-
     for (let index = 0; index < ribbons.length; index += 1) {
       drawRibbon(ribbons[index], index, time)
     }
-
     raf = requestAnimationFrame(render)
   }
 
   function start() {
-    if (!raf && !destroyed && visible && !document.hidden) {
-      raf = requestAnimationFrame(render)
-    }
+    if (!raf && !destroyed && visible && !document.hidden) raf = requestAnimationFrame(render)
   }
 
   function stop() {
@@ -149,7 +147,7 @@ function attachRibbonCanvas(hero) {
   }
 
   function onPointerMove(event) {
-    // Capture the event before the legacy hero listener can recalculate DOM styles.
+    // Prevent the legacy hero listener from recalculating DOM styles on every pointer move.
     event.stopPropagation()
     if (economical || reduced) return
     pointerTargetX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / Math.max(rect.width, 1) - .5) * 2))
@@ -194,21 +192,24 @@ function attachRibbonCanvas(hero) {
     document.removeEventListener('visibilitychange', onVisibilityChange)
     canvas.remove()
     instances.delete(hero)
+    if (record) records.delete(record)
   }
 
-  instances.set(hero, { destroy })
+  record = { hero, destroy }
+  records.add(record)
+  instances.set(hero, record)
   resize()
   start()
 }
 
 function scan() {
+  records.forEach(record => {
+    if (!record.hero.isConnected) record.destroy()
+  })
   document.querySelectorAll('.animated-hero.brand-hero').forEach(attachRibbonCanvas)
 }
 
 scan()
 
-const observer = new MutationObserver(() => {
-  scan()
-})
-
+const observer = new MutationObserver(scan)
 observer.observe(document.documentElement, { childList: true, subtree: true })
