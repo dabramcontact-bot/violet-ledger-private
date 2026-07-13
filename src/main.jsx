@@ -141,6 +141,28 @@ function calcStatus(row) {
   return 'request'
 }
 
+const editableStatusSequence = ['request', 'offer', 'calculation', 'proposed', 'pi_sent', 'revision', 'signed']
+
+function requestAtStage(row, nextStatus) {
+  const nextIndex = Math.max(0, editableStatusSequence.indexOf(nextStatus))
+  const today = localDateValue()
+  const reached = index => nextIndex >= index
+  return {
+    ...row,
+    offer_received: reached(1),
+    offer_received_at: reached(1) ? (row.offer_received_at || today) : '',
+    included_calculation: reached(2),
+    proposed_to_nikolai: reached(3),
+    proposed_to_nikolai_at: reached(3) ? (row.proposed_to_nikolai_at || today) : '',
+    pi_sent: reached(4),
+    pi_sent_at: reached(4) ? (row.pi_sent_at || today) : '',
+    pi_revision: nextStatus === 'revision',
+    pi_revision_at: nextStatus === 'revision' ? (row.pi_revision_at || today) : '',
+    pi_signed: nextStatus === 'signed',
+    pi_signed_at: nextStatus === 'signed' ? (row.pi_signed_at || today) : ''
+  }
+}
+
 function workflowStepState(row, key) {
   const raw = row?.workflow_steps?.[key]
   if (raw === true) return { done: true, completed_at: '' }
@@ -356,6 +378,10 @@ function Sidebar({ page, setPage, profile, open, setOpen }) {
       <nav>{items.map(([id, Icon, label], index) => <button key={id} className={page === id ? 'active' : ''} onClick={() => { setPage(id); setOpen(false) }}><span className="nav-index">0{index + 1}</span><Icon size={17}/><span>{label}</span>{page === id && <ChevronRight size={15}/>}</button>)}</nav>
       <div className="side-footer"><div className="avatar">{profile?.email?.[0]?.toUpperCase()}</div><div><b>{profile?.email}</b><small>{roleLabel[profile?.role]}</small></div><button title="Выйти" onClick={() => supabase.auth.signOut()}><LogOut size={17}/></button></div>
     </aside>
+    <nav className="mobile-bottom-nav" aria-label="Основная мобильная навигация">
+      {[['dashboard', LayoutDashboard, 'Обзор'], ['requests', ClipboardList, 'Запросы'], ['logistics', Truck, 'Логистика']].map(([id, Icon, label]) => <button type="button" key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)}><Icon/><span>{label}</span></button>)}
+      <button type="button" aria-label="Открыть всё меню" onClick={() => setOpen(true)}><Menu/><span>Ещё</span></button>
+    </nav>
   </>
 }
 
@@ -514,29 +540,30 @@ function MiniCategories({ rows }) {
 }
 
 function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
+  const featured = rows[0] || { request_number: 'REQ-2026-001', product_name: 'Новая закупка', category: 'Товар из Китая', agent_name: 'Китайский агент' }
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
-  return <section className="animated-hero cinematic-hero" data-scene="hero">
-    <div className="cinematic-panel">
-      <svg className="cinematic-ribbons" viewBox="0 0 1200 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <g className="ribbon-field">
-          <path className="ribbon ribbon-lilac" d="M-180 80 C120 0 300 350 560 270 S940 -40 1380 110"/>
-          <path className="ribbon ribbon-rust" d="M-170 610 C120 410 270 640 520 520 S870 210 1390 330"/>
-          <path className="ribbon ribbon-green" d="M-170 470 C120 560 320 270 600 390 S970 610 1390 420"/>
-          <path className="ribbon ribbon-sand" d="M-180 360 C100 210 350 520 610 430 S940 110 1390 220"/>
-          <path className="ribbon ribbon-blue" d="M-160 270 C120 420 330 130 610 260 S980 520 1390 300"/>
-          <path className="ribbon ribbon-violet" d="M-170 700 C160 490 360 760 650 590 S1030 280 1390 500"/>
-        </g>
-      </svg>
-      <div className="cinematic-shade"/>
-      <div className="cinematic-meta"><span><Package size={13}/> VIOLET LEDGER / ROUTE 01</span><span><i/> SYSTEM ONLINE</span></div>
-      <div className="cinematic-copy">
-        <small>Система закупок, которая ведёт товар</small>
-        <h1>Весь путь товара:<br/>запрос, PI, логистика<br/>и склад</h1>
-        {canEdit ? <button className="cinematic-cta" onClick={onAdd}><Package size={15}/> Создать запрос</button> : <button className="cinematic-cta" onClick={onOpenLogistics}><Route size={15}/> Смотреть маршрут</button>}
-      </div>
-      <div className="cinematic-status"><i/><span>CHINA PROCUREMENT / LIVE</span><b>{rows.length}</b></div>
-      <div className="cinematic-route-dock" aria-label="Этапы закупки"><span>RFQ</span><i/><span>PI</span><i/><span>В пути {inTransit}</span><i/><span>Склад</span></div>
-      <div className="cinematic-scroll-cue"><span>Прокрутите</span><i/></div>
+  const signed = rows.filter(row => row.pi_signed).length
+  const categories = new Set(rows.map(row => row.category).filter(Boolean)).size
+  return <section className="animated-hero brand-hero" data-scene="hero">
+    <div className="hero-ambient ambient-one" aria-hidden="true"/><div className="hero-ambient ambient-two" aria-hidden="true"/>
+    <div className="hero-copy">
+      <div className="hero-eyebrow"><Route/> CHINA → PI → WAREHOUSE</div>
+      <h1><span className="hero-title-line">Весь путь товара.</span><span className="hero-title-line hero-title-line-two">В одном <span className="violet-route-mark">V</span> ритме.</span></h1>
+      <p>Запросы, китайские агенты, документы PI и логистика собраны в одной спокойной системе.</p>
+      <div className="hero-actions">{canEdit ? <button className="primary" onClick={onAdd}>Создать запрос <ArrowRight size={16}/></button> : <button className="primary" onClick={onOpenLogistics}>Смотреть маршрут <ArrowRight size={16}/></button>}</div>
+      <div className="hero-scroll-cue"><span>Прокрутите, чтобы увидеть маршрут</span><i/></div>
+    </div>
+    <div className="hero-showcase">
+      <div className="showcase-layer layer-three"/><div className="showcase-layer layer-two"/>
+      <article className="showcase-card">
+        <div className="showcase-topline"><span>LIVE PROCUREMENT · {featured.request_number}</span><b>{String(rows.length).padStart(2, '0')}</b></div>
+        <span>{featured.product_name}</span>
+        <div className="showcase-agent"><Factory/><div><small>Китайский агент</small><b>{featured.agent_name}</b></div></div>
+        <div className="showcase-orbit"><ClipboardList/><i/><FileCheck2/><i/><Ship/><i/><Warehouse/></div>
+        <div className="showcase-balance"><Package/><div><small>Текущий этап</small><strong>{statusMeta[calcStatus(featured)]?.[0]}</strong></div></div>
+        <div className="showcase-foot"><b>{categories}</b><span>категорий</span><b>{signed}</b><span>PI подписано</span><b>{inTransit}</b><span>в пути</span></div>
+        <div className="showcase-pulse pulse-one"/><div className="showcase-pulse pulse-two"/>
+      </article>
     </div>
   </section>
 }
@@ -676,8 +703,21 @@ function usePhantomMotion() {
       const rect = hero.getBoundingClientRect()
       pointerX = ((event.clientX - rect.left) / Math.max(rect.width, 1) - .5) * 2
       pointerY = ((event.clientY - rect.top) / Math.max(rect.height, 1) - .5) * 2
+      if (!reducedMotion) {
+        story.style.setProperty('--hero-pointer-x', `${(pointerX * 12).toFixed(2)}px`)
+        story.style.setProperty('--hero-pointer-y', `${(pointerY * 8).toFixed(2)}px`)
+        story.style.setProperty('--layer-two-pointer-x', `${(pointerX * 7).toFixed(2)}px`)
+        story.style.setProperty('--layer-three-pointer-x', `${(pointerX * 12).toFixed(2)}px`)
+      }
     }
-    const resetPointer = () => { pointerX = 0; pointerY = 0 }
+    const resetPointer = () => {
+      pointerX = 0
+      pointerY = 0
+      story.style.setProperty('--hero-pointer-x', '0px')
+      story.style.setProperty('--hero-pointer-y', '0px')
+      story.style.setProperty('--layer-two-pointer-x', '0px')
+      story.style.setProperty('--layer-three-pointer-x', '0px')
+    }
     hero?.addEventListener('pointermove', updatePointer, { passive: true })
     hero?.addEventListener('pointerleave', resetPointer)
 
@@ -919,17 +959,17 @@ function RequestDetail({ row, onClose, onEdit, onSaveInline, canEdit }) {
   </div>
 }
 
-function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = false }) {
+function RequestTable({ rows, onEdit, onDelete, onInspect, onQuickStage, onQuickDate, savingId, canEdit, compact = false }) {
   if (!rows.length) return <div className="empty"><PackageOpen size={34}/><b>Запросов пока нет</b><span>Администратор может добавить первую товарную позицию.</span></div>
   return <>
     <div className="table-wrap request-table-view"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Чек-лист</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id} onDoubleClick={() => onInspect?.(row)}>
       <td><button className="request-number-link" onClick={() => onInspect?.(row)}>{row.request_number}<ChevronRight size={13}/></button></td>
       <td><b>{row.product_name}</b><small>{row.category}{row.article_numbers ? ` · ${row.article_numbers}` : ''}</small></td>
       <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
-      <td>{formatDate(row.request_sent_at)}</td>
+      <td>{canEdit && !compact ? <input className="row-date-input" type="date" aria-label={`Дата отправки ${row.request_number}`} value={row.request_sent_at || ''} disabled={savingId === row.id} onChange={event => onQuickDate?.(row, event.target.value)}/> : formatDate(row.request_sent_at)}</td>
       <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
       <td><WorkflowProgressPill row={row}/></td>
-      <td><StatusPill status={calcStatus(row)}/></td>
+      <td>{canEdit && !compact ? <div className="row-stage-control"><StatusPill status={calcStatus(row)}/><select aria-label={`Текущий этап ${row.request_number}`} value={calcStatus(row)} disabled={savingId === row.id || calcStatus(row) === 'unsuccessful'} onChange={event => onQuickStage?.(row, event.target.value)}>{editableStatusSequence.map(key => <option key={key} value={key}>{statusMeta[key][0]}</option>)}{calcStatus(row) === 'unsuccessful' && <option value="unsuccessful">Сделка не успешна</option>}</select></div> : <StatusPill status={calcStatus(row)}/>}</td>
       {!compact && <td><div className="row-actions"><button title="Открыть карточку" onClick={() => onInspect?.(row)}><ChevronRight size={16}/></button>{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> Просмотр</span>}</div></td>}
     </tr>)}</tbody></table></div>
     <div className="request-card-list">{rows.map(row => <article className="mobile-request-card" key={row.id}>
@@ -949,6 +989,10 @@ function Requests({ rows, onAdd, onEdit, onDelete, onSaveInline, canEdit, setOpe
   const [category, setCategory] = useState('all')
   const [checklist, setChecklist] = useState('all')
   const [deadline, setDeadline] = useState('all')
+  const [quickView, setQuickView] = useState('all')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [savingId, setSavingId] = useState(null)
+  const [quickError, setQuickError] = useState('')
   const [selected, setSelected] = useState(null)
   const agents = useMemo(() => [...new Set(rows.map(row => row.agent_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
   const categories = useMemo(() => [...new Set(rows.map(row => row.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
@@ -962,14 +1006,28 @@ function Requests({ rows, onAdd, onEdit, onDelete, onSaveInline, canEdit, setOpe
     const matchesDeadline = deadline === 'all'
       || (deadline === 'overdue' && piRequestIsOverdue(row))
       || (deadline === 'on_time' && !piRequestIsOverdue(row))
+    const matchesQuickView = quickView === 'all'
+      || (quickView === 'overdue' && piRequestIsOverdue(row))
+      || (quickView === 'waiting_pi' && !row.pi_sent && !row.pi_signed && !row.price_not_viable && !row.not_approved && (row.included_calculation || row.proposed_to_nikolai || workflowStepState(row, 'request_pi').done))
+      || (quickView === 'transit' && row.shipment_status === 'in_transit')
+      || (quickView === 'unsuccessful' && (row.price_not_viable || row.not_approved))
     return (status === 'all' || calcStatus(row) === status)
       && (agent === 'all' || row.agent_name === agent)
       && (category === 'all' || row.category === category)
       && matchesChecklist
       && matchesDeadline
+      && matchesQuickView
       && [row.request_number, row.product_name, row.category, row.agent_name, row.article_numbers].join(' ').toLowerCase().includes(query.trim().toLowerCase())
-  }), [rows, query, status, agent, category, checklist, deadline, totalWorkflowSteps])
-  const hasFilters = query || status !== 'all' || agent !== 'all' || category !== 'all' || checklist !== 'all' || deadline !== 'all'
+  }), [rows, query, status, agent, category, checklist, deadline, quickView, totalWorkflowSteps])
+  const hasFilters = query || status !== 'all' || agent !== 'all' || category !== 'all' || checklist !== 'all' || deadline !== 'all' || quickView !== 'all'
+  const advancedFilterCount = [query, status !== 'all', agent !== 'all', category !== 'all', checklist !== 'all', deadline !== 'all'].filter(Boolean).length
+  const quickViews = [
+    ['all', 'Все', rows.length],
+    ['overdue', 'Просрочено', rows.filter(piRequestIsOverdue).length],
+    ['waiting_pi', 'Ждём PI', rows.filter(row => !row.pi_sent && !row.pi_signed && !row.price_not_viable && !row.not_approved && (row.included_calculation || row.proposed_to_nikolai || workflowStepState(row, 'request_pi').done)).length],
+    ['transit', 'В пути', rows.filter(row => row.shipment_status === 'in_transit').length],
+    ['unsuccessful', 'Неуспешные', rows.filter(row => row.price_not_viable || row.not_approved).length]
+  ]
 
   useEffect(() => {
     setSelected(current => current ? (rows.find(row => row.id === current.id) || null) : null)
@@ -982,7 +1040,20 @@ function Requests({ rows, onAdd, onEdit, onDelete, onSaveInline, canEdit, setOpe
     setCategory('all')
     setChecklist('all')
     setDeadline('all')
+    setQuickView('all')
+    setFiltersOpen(false)
   }
+
+  async function quickSave(nextRow) {
+    setSavingId(nextRow.id)
+    setQuickError('')
+    try { await onSaveInline(nextRow) }
+    catch (saveError) { setQuickError(saveError.message) }
+    finally { setSavingId(null) }
+  }
+
+  const quickStage = (row, nextStatus) => quickSave(requestAtStage(row, nextStatus))
+  const quickDate = (row, nextDate) => nextDate ? quickSave({ ...row, request_sent_at: nextDate }) : setQuickError('Дата отправки запроса не может быть пустой.')
   const revision = rows.filter(row => row.pi_revision && !row.pi_signed).length
   const signed = rows.filter(row => row.pi_signed).length
   const unsuccessful = rows.filter(row => row.price_not_viable || row.not_approved).length
@@ -998,7 +1069,7 @@ function Requests({ rows, onAdd, onEdit, onDelete, onSaveInline, canEdit, setOpe
       <article><span><CircleAlert/>Сделка не успешна</span><strong>{unsuccessful}</strong><small>Цена не прошла или не согласовано</small></article>
       <article><span><Ship/>Сейчас в пути</span><strong>{inTransit}</strong><small>Активные перевозки</small></article>
     </section>
-    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar registry-filter-toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="registry-filter-grid"><div className="filter"><Filter size={16}/><select aria-label="Фильтр по этапу" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="filter"><Factory size={16}/><select aria-label="Фильтр по агенту" value={agent} onChange={event => setAgent(event.target.value)}><option value="all">Все агенты</option>{agents.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><Boxes size={16}/><select aria-label="Фильтр по категории" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><ClipboardList size={16}/><select aria-label="Фильтр по чек-листу" value={checklist} onChange={event => setChecklist(event.target.value)}><option value="all">Любой чек-лист</option><option value="not_started">Не начат</option><option value="in_progress">В работе</option><option value="complete">Завершён</option></select></div><div className="filter"><Clock3 size={16}/><select aria-label="Фильтр по сроку PI" value={deadline} onChange={event => setDeadline(event.target.value)}><option value="all">Любой срок PI</option><option value="overdue">PI просрочена</option><option value="on_time">Без просрочки PI</option></select></div>{hasFilters && <button type="button" className="filter-reset" onClick={resetFilters}><X size={15}/> Сбросить</button>}</div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
+    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="registry-controls"><div className="registry-quick-views" aria-label="Быстрые представления">{quickViews.map(([key, label, count]) => <button type="button" key={key} className={quickView === key ? 'active' : ''} onClick={() => setQuickView(key)}><span>{label}</span><b>{count}</b></button>)}</div><button type="button" className="mobile-filter-toggle" onClick={() => setFiltersOpen(true)}><Filter size={16}/> Фильтры {advancedFilterCount > 0 && <b>{advancedFilterCount}</b>}</button><div className={`mobile-filter-backdrop ${filtersOpen ? 'show' : ''}`} onClick={() => setFiltersOpen(false)}/><div className={`toolbar registry-filter-toolbar ${filtersOpen ? 'open' : ''}`}><div className="mobile-filter-sheet-head"><div><small>РАБОЧИЙ РЕЕСТР</small><b>Фильтры</b></div><button type="button" aria-label="Закрыть фильтры" onClick={() => setFiltersOpen(false)}><X/></button></div><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="registry-filter-grid"><div className="filter"><Filter size={16}/><select aria-label="Фильтр по этапу" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="filter"><Factory size={16}/><select aria-label="Фильтр по агенту" value={agent} onChange={event => setAgent(event.target.value)}><option value="all">Все агенты</option>{agents.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><Boxes size={16}/><select aria-label="Фильтр по категории" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><ClipboardList size={16}/><select aria-label="Фильтр по чек-листу" value={checklist} onChange={event => setChecklist(event.target.value)}><option value="all">Любой чек-лист</option><option value="not_started">Не начат</option><option value="in_progress">В работе</option><option value="complete">Завершён</option></select></div><div className="filter"><Clock3 size={16}/><select aria-label="Фильтр по сроку PI" value={deadline} onChange={event => setDeadline(event.target.value)}><option value="all">Любой срок PI</option><option value="overdue">PI просрочена</option><option value="on_time">Без просрочки PI</option></select></div>{hasFilters && <button type="button" className="filter-reset" onClick={resetFilters}><X size={15}/> Сбросить</button>}</div></div></div>{quickError && <div className="form-error registry-quick-error"><CircleAlert size={15}/><div><b>Не удалось быстро изменить запрос</b><span>{quickError}</span></div></div>}<RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} onQuickStage={quickStage} onQuickDate={quickDate} savingId={savingId} canEdit={canEdit}/></section>
     {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} onSaveInline={onSaveInline} canEdit={canEdit}/>}
   </>
 }
