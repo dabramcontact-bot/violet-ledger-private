@@ -460,6 +460,31 @@ function RequestJourney({ row, compact = false }) {
   </div>
 }
 
+const editableCycleStages = [
+  { key: 'request', label: 'Запрос', dateKey: 'request_sent_at', fixed: true },
+  { key: 'offer', label: 'Предложение', field: 'offer_received', dateKey: 'offer_received_at' },
+  { key: 'calculation', label: 'Расчёт', field: 'included_calculation' },
+  { key: 'proposed', label: 'Николаю', field: 'proposed_to_nikolai', dateKey: 'proposed_to_nikolai_at' },
+  { key: 'pi_sent', label: 'PI', field: 'pi_sent', dateKey: 'pi_sent_at' },
+  { key: 'revision', label: 'Доработка', field: 'pi_revision', dateKey: 'pi_revision_at' },
+  { key: 'signed', label: 'Подписана', field: 'pi_signed', dateKey: 'pi_signed_at' }
+]
+
+function RequestCycleEditor({ row, onToggle, onDateChange }) {
+  return <div className="request-cycle-editor">
+    {editableCycleStages.map((stage, index) => {
+      const done = stage.fixed ? Boolean(row.request_sent_at) : Boolean(row[stage.field])
+      return <div className={`cycle-edit-stage ${done ? 'done' : ''}`} key={stage.key}>
+        <button type="button" className="check" disabled={stage.fixed} aria-label={`${done ? 'Снять отметку' : 'Отметить'}: ${stage.label}`} onClick={() => onToggle(stage, !done)}>{done ? <Check size={14}/> : index + 1}</button>
+        <b>{stage.label}</b>
+        {stage.dateKey
+          ? <input type="date" aria-label={`Дата этапа: ${stage.label}`} value={row[stage.dateKey] || ''} onChange={event => onDateChange(stage, event.target.value)}/>
+          : <span>{done ? 'Внесено' : 'Не внесено'}</span>}
+      </div>
+    })}
+  </div>
+}
+
 function ProcurementRoute({ rows }) {
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const arrived = rows.filter(row => row.shipment_status === 'arrived').length
@@ -791,11 +816,11 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
   </div>
 }
 
-function RequestDetail({ row, onClose, onEdit, onSaveWorkflow, canEdit }) {
-  const [workflowEditing, setWorkflowEditing] = useState(false)
-  const [workflowDraft, setWorkflowDraft] = useState(row.workflow_steps || {})
-  const [workflowBusy, setWorkflowBusy] = useState(false)
-  const [workflowError, setWorkflowError] = useState('')
+function RequestDetail({ row, onClose, onEdit, onSaveInline, canEdit }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState({ ...row, workflow_steps: row.workflow_steps || {} })
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   useEffect(() => {
     const closeOnEscape = event => { if (event.key === 'Escape') onClose() }
@@ -803,67 +828,89 @@ function RequestDetail({ row, onClose, onEdit, onSaveWorkflow, canEdit }) {
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [onClose])
 
-  useEffect(() => { setWorkflowDraft(row.workflow_steps || {}) }, [row.id, row.workflow_steps])
+  useEffect(() => {
+    setDraft({ ...row, workflow_steps: row.workflow_steps || {} })
+    setEditing(false)
+    setError('')
+  }, [row])
 
-  const toggleWorkflowStep = (key, done) => setWorkflowDraft(current => {
-    const next = { ...(current || {}) }
-    if (done) next[key] = { done: true, completed_at: localDateValue() }
-    else delete next[key]
-    return next
+  const toggleWorkflowStep = (key, done) => setDraft(current => {
+    const workflowSteps = { ...(current.workflow_steps || {}) }
+    if (done) workflowSteps[key] = { done: true, completed_at: localDateValue() }
+    else delete workflowSteps[key]
+    return { ...current, workflow_steps: workflowSteps }
   })
 
-  const setWorkflowDate = (key, completedAt) => setWorkflowDraft(current => {
-    const currentRow = { workflow_steps: current || {} }
-    const state = workflowStepState(currentRow, key)
-    return { ...(current || {}), [key]: { done: completedAt ? true : state.done, completed_at: completedAt } }
-  })
+  const setWorkflowDate = (key, completedAt) => setDraft(current => ({
+    ...current,
+    workflow_steps: {
+      ...(current.workflow_steps || {}),
+      [key]: { done: completedAt ? true : workflowStepState(current, key).done, completed_at: completedAt }
+    }
+  }))
 
-  async function saveWorkflow() {
-    setWorkflowBusy(true)
-    setWorkflowError('')
+  const toggleCycleStage = (stage, done) => setDraft(current => ({
+    ...current,
+    [stage.field]: done,
+    ...(stage.dateKey ? { [stage.dateKey]: done ? (current[stage.dateKey] || localDateValue()) : '' } : {})
+  }))
+
+  const setCycleDate = (stage, value) => setDraft(current => ({
+    ...current,
+    [stage.dateKey]: value,
+    ...(stage.field ? { [stage.field]: Boolean(value) || current[stage.field] } : {})
+  }))
+
+  function cancelInlineEditing() {
+    setDraft({ ...row, workflow_steps: row.workflow_steps || {} })
+    setEditing(false)
+    setError('')
+  }
+
+  async function saveInline() {
+    setBusy(true)
+    setError('')
     try {
-      await onSaveWorkflow(row.id, workflowDraft)
-      setWorkflowEditing(false)
+      await onSaveInline(draft)
+      setEditing(false)
     } catch (saveError) {
-      setWorkflowError(saveError.message)
+      setError(saveError.message)
     } finally {
-      setWorkflowBusy(false)
+      setBusy(false)
     }
   }
 
-  const workflowActions = canEdit && (workflowEditing
-    ? <div className="workflow-inline-actions"><button type="button" className="secondary" disabled={workflowBusy} onClick={() => { setWorkflowDraft(row.workflow_steps || {}); setWorkflowEditing(false); setWorkflowError('') }}>Отмена</button><button type="button" className="primary" disabled={workflowBusy} onClick={saveWorkflow}>{workflowBusy ? 'Сохранение…' : 'Сохранить'}</button></div>
-    : <button type="button" className="workflow-edit-button" onClick={() => setWorkflowEditing(true)}><Pencil size={14}/> Редактировать</button>)
+  const view = editing ? draft : row
 
   return <div className="request-detail-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <div className="request-detail-drawer" role="dialog" aria-modal="true" aria-label={`Запрос ${row.request_number}`}>
       <div className="request-detail-topbar"><span>КАРТОЧКА ЗАКУПКИ</span><button aria-label="Закрыть карточку" onClick={onClose}><X/></button></div>
       <div className="request-detail-hero">
         <div className="request-detail-mark"><Package/></div>
-        <div><small>{row.request_number}</small><h2>{row.product_name}</h2><p>{row.category}</p></div>
-        <StatusPill status={calcStatus(row)}/>
+        <div><small>{view.request_number}</small><h2>{view.product_name}</h2><p>{view.category}</p></div>
+        <StatusPill status={calcStatus(view)}/>
       </div>
       <section className="request-detail-section">
-        <div className="request-detail-title"><span>Цикл запроса и PI</span><small>Обновляется из общей базы</small></div>
-        <RequestJourney row={row}/>
+        <div className="request-detail-title"><span>Цикл запроса и PI</span><small>{editing ? 'Меняйте этапы и даты прямо здесь' : 'Обновляется из общей базы'}</small></div>
+        {editing ? <RequestCycleEditor row={draft} onToggle={toggleCycleStage} onDateChange={setCycleDate}/> : <RequestJourney row={view}/>}
       </section>
-      <WorkflowChecklist row={{ ...row, workflow_steps: workflowDraft }} editable={workflowEditing} onToggle={toggleWorkflowStep} onDateChange={setWorkflowDate} actions={workflowActions}/>
-      {workflowError && <div className="form-error workflow-inline-error"><CircleAlert size={16}/><div><b>Этапы не сохранены</b><span>{workflowError}</span></div></div>}
+      <WorkflowChecklist row={draft} editable={editing} onToggle={toggleWorkflowStep} onDateChange={setWorkflowDate}/>
+      {error && <div className="form-error workflow-inline-error"><CircleAlert size={16}/><div><b>Изменения не сохранены</b><span>{error}</span></div></div>}
       <section className="request-detail-grid">
-        <div><Factory/><small>Китайский агент</small><b>{row.agent_name || '—'}</b></div>
-        <div><Boxes/><small>Артикулы</small><b>{row.article_numbers || 'Не указаны'}</b></div>
-        <div><Clock3/><small>Запрос отправлен</small><b>{formatDate(row.request_sent_at)}</b></div>
-        <div><Users/><small>Предложено Николаю</small><b>{row.proposed_to_nikolai ? formatDate(row.proposed_to_nikolai_at) : 'Нет'}</b></div>
-        <div><Truck/><small>Логистика</small><b>{row.logistics_company || 'Не назначена'}</b></div>
-        <div><Warehouse/><small>Состояние поставки</small><b>{shipmentMeta[row.shipment_status]?.[0] || shipmentMeta.not_shipped[0]}</b></div>
+        <div><Factory/><small>Китайский агент</small><b>{view.agent_name || '—'}</b></div>
+        <div><Boxes/><small>Артикулы</small><b>{view.article_numbers || 'Не указаны'}</b></div>
+        <div><Clock3/><small>Запрос отправлен</small><b>{formatDate(view.request_sent_at)}</b></div>
+        <div><Users/><small>Предложено Николаю</small><b>{view.proposed_to_nikolai ? formatDate(view.proposed_to_nikolai_at) : 'Нет'}</b></div>
+        <div><Truck/><small>Логистика</small><b>{view.logistics_company || 'Не назначена'}</b></div>
+        <div><Warehouse/><small>Состояние поставки</small><b>{shipmentMeta[view.shipment_status]?.[0] || shipmentMeta.not_shipped[0]}</b></div>
       </section>
-      {(row.price_not_viable || row.not_approved) && <section className="request-detail-failure"><CircleAlert/><div><small>СДЕЛКА НЕ УСПЕШНА</small><p>{[row.price_not_viable && 'Цена не проходит по нашим методам', row.not_approved && 'Предложение не согласовано'].filter(Boolean).join(' · ')}</p></div></section>}
+      {(view.price_not_viable || view.not_approved) && <section className="request-detail-failure"><CircleAlert/><div><small>СДЕЛКА НЕ УСПЕШНА</small><p>{[view.price_not_viable && 'Цена не проходит по нашим методам', view.not_approved && 'Предложение не согласовано'].filter(Boolean).join(' · ')}</p></div></section>}
       <section className="request-detail-section request-detail-route">
-        <div className="request-detail-title"><span>Маршрут поставки</span><ShipmentPill status={row.shipment_status}/></div>
-        <div className="detail-route-track"><span className="done"><Factory/><b>Фабрика</b></span><i/><span className={row.shipment_status !== 'not_shipped' ? 'done' : ''}><Ship/><b>В пути</b></span><i/><span className={row.shipment_status === 'arrived' ? 'done' : ''}><Warehouse/><b>Склад</b></span></div>
+        <div className="request-detail-title"><span>Маршрут поставки</span><ShipmentPill status={view.shipment_status}/></div>
+        <div className="detail-route-track"><span className="done"><Factory/><b>Фабрика</b></span><i/><span className={view.shipment_status !== 'not_shipped' ? 'done' : ''}><Ship/><b>В пути</b></span><i/><span className={view.shipment_status === 'arrived' ? 'done' : ''}><Warehouse/><b>Склад</b></span></div>
       </section>
-      {row.notes && <section className="request-detail-note"><small>КОММЕНТАРИЙ</small><p>{row.notes}</p></section>}
-      <div className="request-detail-actions"><button className="secondary" onClick={onClose}>Закрыть</button>{canEdit && <button className="primary" onClick={() => { onClose(); onEdit(row) }}><Pencil size={15}/> Редактировать запрос</button>}</div>
+      {view.notes && <section className="request-detail-note"><small>КОММЕНТАРИЙ</small><p>{view.notes}</p></section>}
+      <div className="request-detail-actions">{editing ? <><button type="button" className="secondary" disabled={busy} onClick={cancelInlineEditing}>Отмена</button><button type="button" className="primary" disabled={busy} onClick={saveInline}>{busy ? 'Сохранение…' : 'Сохранить изменения'}</button></> : <><button className="secondary" onClick={onClose}>Закрыть</button>{canEdit && <button className="secondary detail-all-fields" onClick={() => { onClose(); onEdit(row) }}>Все поля</button>}{canEdit && <button className="primary" onClick={() => setEditing(true)}><Pencil size={15}/> Редактировать здесь</button>}</>}</div>
     </div>
   </div>
 }
@@ -891,11 +938,47 @@ function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = fa
   </>
 }
 
-function Requests({ rows, onAdd, onEdit, onDelete, onSaveWorkflow, canEdit, setOpen }) {
+function Requests({ rows, onAdd, onEdit, onDelete, onSaveInline, canEdit, setOpen }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
+  const [agent, setAgent] = useState('all')
+  const [category, setCategory] = useState('all')
+  const [checklist, setChecklist] = useState('all')
+  const [deadline, setDeadline] = useState('all')
   const [selected, setSelected] = useState(null)
-  const filtered = rows.filter(row => (status === 'all' || calcStatus(row) === status) && [row.request_number, row.product_name, row.category, row.agent_name, row.article_numbers].join(' ').toLowerCase().includes(query.toLowerCase()))
+  const agents = useMemo(() => [...new Set(rows.map(row => row.agent_name).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
+  const categories = useMemo(() => [...new Set(rows.map(row => row.category).filter(Boolean))].sort((a, b) => a.localeCompare(b)), [rows])
+  const totalWorkflowSteps = WORKFLOW_GROUPS.reduce((sum, group) => sum + group.steps.length, 0)
+  const filtered = useMemo(() => rows.filter(row => {
+    const workflowDone = WORKFLOW_GROUPS.reduce((sum, group) => sum + workflowProgress(row, group).done, 0)
+    const matchesChecklist = checklist === 'all'
+      || (checklist === 'not_started' && workflowDone === 0)
+      || (checklist === 'in_progress' && workflowDone > 0 && workflowDone < totalWorkflowSteps)
+      || (checklist === 'complete' && workflowDone === totalWorkflowSteps)
+    const matchesDeadline = deadline === 'all'
+      || (deadline === 'overdue' && piRequestIsOverdue(row))
+      || (deadline === 'on_time' && !piRequestIsOverdue(row))
+    return (status === 'all' || calcStatus(row) === status)
+      && (agent === 'all' || row.agent_name === agent)
+      && (category === 'all' || row.category === category)
+      && matchesChecklist
+      && matchesDeadline
+      && [row.request_number, row.product_name, row.category, row.agent_name, row.article_numbers].join(' ').toLowerCase().includes(query.trim().toLowerCase())
+  }), [rows, query, status, agent, category, checklist, deadline, totalWorkflowSteps])
+  const hasFilters = query || status !== 'all' || agent !== 'all' || category !== 'all' || checklist !== 'all' || deadline !== 'all'
+
+  useEffect(() => {
+    setSelected(current => current ? (rows.find(row => row.id === current.id) || null) : null)
+  }, [rows])
+
+  function resetFilters() {
+    setQuery('')
+    setStatus('all')
+    setAgent('all')
+    setCategory('all')
+    setChecklist('all')
+    setDeadline('all')
+  }
   const revision = rows.filter(row => row.pi_revision && !row.pi_signed).length
   const signed = rows.filter(row => row.pi_signed).length
   const unsuccessful = rows.filter(row => row.price_not_viable || row.not_approved).length
@@ -911,8 +994,8 @@ function Requests({ rows, onAdd, onEdit, onDelete, onSaveWorkflow, canEdit, setO
       <article><span><CircleAlert/>Сделка не успешна</span><strong>{unsuccessful}</strong><small>Цена не прошла или не согласовано</small></article>
       <article><span><Ship/>Сейчас в пути</span><strong>{inTransit}</strong><small>Активные перевозки</small></article>
     </section>
-    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
-    {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} onSaveWorkflow={onSaveWorkflow} canEdit={canEdit}/>}
+    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar registry-filter-toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="registry-filter-grid"><div className="filter"><Filter size={16}/><select aria-label="Фильтр по этапу" value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div><div className="filter"><Factory size={16}/><select aria-label="Фильтр по агенту" value={agent} onChange={event => setAgent(event.target.value)}><option value="all">Все агенты</option>{agents.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><Boxes size={16}/><select aria-label="Фильтр по категории" value={category} onChange={event => setCategory(event.target.value)}><option value="all">Все категории</option>{categories.map(item => <option key={item} value={item}>{item}</option>)}</select></div><div className="filter"><ClipboardList size={16}/><select aria-label="Фильтр по чек-листу" value={checklist} onChange={event => setChecklist(event.target.value)}><option value="all">Любой чек-лист</option><option value="not_started">Не начат</option><option value="in_progress">В работе</option><option value="complete">Завершён</option></select></div><div className="filter"><Clock3 size={16}/><select aria-label="Фильтр по сроку PI" value={deadline} onChange={event => setDeadline(event.target.value)}><option value="all">Любой срок PI</option><option value="overdue">PI просрочена</option><option value="on_time">Без просрочки PI</option></select></div>{hasFilters && <button type="button" className="filter-reset" onClick={resetFilters}><X size={15}/> Сбросить</button>}</div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
+    {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} onSaveInline={onSaveInline} canEdit={canEdit}/>}
   </>
 }
 
@@ -1154,9 +1237,10 @@ function App() {
     await loadRows()
   }
 
-  async function saveWorkflow(requestId, workflowSteps) {
+  async function saveInline(form) {
     if (profile.role !== 'admin') throw new Error('Изменения может вносить только администратор.')
-    const { error } = await supabase.from('requests').update({ workflow_steps: workflowSteps || {}, updated_by: session.user.id }).eq('id', requestId)
+    const payload = cleanRequest(form, session.user.id)
+    const { error } = await supabase.from('requests').update(payload).eq('id', form.id)
     if (error) throw new Error(friendlyError(error))
     await loadRows()
   }
@@ -1174,7 +1258,7 @@ function App() {
   if (!profile) return <div className="access-denied"><ShieldCheck size={40}/><h2>Проверяем доступ</h2><p>{dataError || 'Если экран не меняется, ваш email ещё не добавлен администратором.'}</p><button className="secondary" onClick={() => supabase.auth.signOut()}>ВЫЙТИ</button></div>
 
   const canEdit = profile.role === 'admin'
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}<PiDeadlineAlerts rows={rows} onOpenRequests={() => setPage('requests')}/>{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} onOpenLogistics={() => setPage('logistics')} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} onSaveWorkflow={saveWorkflow} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}<PiDeadlineAlerts rows={rows} onOpenRequests={() => setPage('requests')}/>{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} onOpenLogistics={() => setPage('logistics')} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} onSaveInline={saveInline} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
