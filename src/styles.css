@@ -985,6 +985,8 @@ html, body, #root { width: 100%; max-width: 100%; overflow-x: clip; }
 @keyframes ribbon-wave-a { from { transform: translate3d(-3%, 4%, 0) rotate(-2deg); } to { transform: translate3d(4%, -3%, 0) rotate(2.5deg); } }
 @keyframes ribbon-wave-b { from { transform: translate3d(3%, -2%, 0) rotate(2deg); } to { transform: translate3d(-4%, 4%, 0) rotate(-2.8deg); } }
 @keyframes ribbon-wave-c { from { transform: translate3d(-2%, -3%, 0) rotate(-1.5deg); } to { transform: translate3d(3%, 3%, 0) rotate(2deg); } }
+.phantom-story.js-ribbon-motion .ribbon-field,
+.phantom-story.js-ribbon-motion .ribbon { animation: none; }
 .cinematic-shade {
   position: absolute;
   inset: 0;
