@@ -149,6 +149,8 @@ function attachRibbonCanvas(hero) {
   }
 
   function onPointerMove(event) {
+    // Capture the event before the legacy hero listener can recalculate DOM styles.
+    event.stopPropagation()
     if (economical || reduced) return
     pointerTargetX = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / Math.max(rect.width, 1) - .5) * 2))
     pointerTargetY = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / Math.max(rect.height, 1) - .5) * 2))
@@ -177,7 +179,7 @@ function attachRibbonCanvas(hero) {
   }, { threshold: .01 })
   intersectionObserver.observe(hero)
 
-  hero.addEventListener('pointermove', onPointerMove, { passive: true })
+  hero.addEventListener('pointermove', onPointerMove, { passive: true, capture: true })
   hero.addEventListener('pointerleave', onPointerLeave, { passive: true })
   document.addEventListener('visibilitychange', onVisibilityChange)
 
@@ -187,7 +189,7 @@ function attachRibbonCanvas(hero) {
     stop()
     resizeObserver.disconnect()
     intersectionObserver.disconnect()
-    hero.removeEventListener('pointermove', onPointerMove)
+    hero.removeEventListener('pointermove', onPointerMove, true)
     hero.removeEventListener('pointerleave', onPointerLeave)
     document.removeEventListener('visibilitychange', onVisibilityChange)
     canvas.remove()
