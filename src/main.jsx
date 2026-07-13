@@ -21,6 +21,7 @@ const EMPTY = {
   price_not_viable: false, not_approved: false,
   pi_sent: false, pi_sent_at: '', pi_revision: false, pi_revision_at: '',
   pi_signed: false, pi_signed_at: '', notes: '',
+  workflow_steps: {},
   shipment_status: 'not_shipped', logistics_company: '', transit_started_at: '',
   expected_warehouse_at: '', warehouse_arrived_at: ''
 }
@@ -36,6 +37,51 @@ const AGENT_OPTIONS = [
   'OFFICEMART STATIONERY CO.,LTD.',
   'TAIZHOU XUSHENG OUTDOOR PRODUCTS CO.,LTD',
   'NINGBO IHOME INTERNATIONAL TRADING CO., LTD'
+]
+
+const WORKFLOW_GROUPS = [
+  {
+    id: 'preparation',
+    title: 'Этапы подготовки',
+    subtitle: 'От технического задания до шиппинг-плана',
+    steps: [
+      ['create_spec', 'Создать ТЗ'],
+      ['send_spec', 'Отправить'],
+      ['process_spec', 'Обработать'],
+      ['approve_spec', 'Согласовать'],
+      ['request_pi', 'Запросить PI'],
+      ['verify_characteristics', 'Сверить характеристики и отправить на согласование'],
+      ['sign_documents', 'Подписать'],
+      ['handover_to_ved', 'Отдать заказ в ВЭД', 'ВЭД'],
+      ['create_bitrix_task', 'Создать задачу в Битрикс'],
+      ['add_to_google_docs', 'Внести в Google Docs'],
+      ['receive_instructions', 'Получить инструкции'],
+      ['translate_instructions', 'Перевести'],
+      ['proofread_instructions', 'Вычитать'],
+      ['approve_instructions', 'Согласовать инструкции'],
+      ['request_site_photos', 'Запросить фото для сайта'],
+      ['check_inspection_report', 'Проверить инспекционный отчёт'],
+      ['receive_shipping_plan', 'Получить шиппинг-план']
+    ]
+  },
+  {
+    id: 'shipping',
+    title: 'Этапы отгрузки',
+    subtitle: 'Документы, перевозка, склад и контент',
+    steps: [
+      ['prepare_ved_sticker', 'Подготовить стикер', 'ВЭД'],
+      ['prepare_shipping_mark', 'Подготовить Shipping Mark', 'ВЭД'],
+      ['prepare_pl_cl', 'Подготовить PL и CL', 'ВЭД'],
+      ['run_freight_tender', 'Провести тендер на перевозку'],
+      ['control_dispatch', 'Контроль отгрузки', 'ВЭД'],
+      ['control_transit', 'Контроль в пути', 'ВЭД'],
+      ['customs_clearance', 'Растаможка', 'ВЭД'],
+      ['warehouse_arrival', 'Приход на склад'],
+      ['create_product_card', 'Создание карточки'],
+      ['upload_content', 'Прогрузка контента'],
+      ['payment_by_deferral', 'Оплата по сроку отсрочки с даты документов']
+    ]
+  }
 ]
 
 const DATE_FIELDS = [
@@ -103,12 +149,25 @@ function calcStatus(row) {
   return 'request'
 }
 
+function workflowStepState(row, key) {
+  const raw = row?.workflow_steps?.[key]
+  if (raw === true) return { done: true, completed_at: '' }
+  if (!raw || typeof raw !== 'object') return { done: false, completed_at: '' }
+  return { done: Boolean(raw.done), completed_at: raw.completed_at || '' }
+}
+
+function workflowProgress(row, group) {
+  const done = group.steps.reduce((total, [key]) => total + (workflowStepState(row, key).done ? 1 : 0), 0)
+  return { done, total: group.steps.length, percent: Math.round(done / group.steps.length * 100) }
+}
+
 function cleanRequest(form, userId) {
   const payload = { ...form, updated_by: userId }
   ;['request_number', 'category', 'product_name', 'agent_name', 'article_numbers', 'notes', 'logistics_company'].forEach(key => {
     payload[key] = String(payload[key] || '').trim()
   })
   DATE_FIELDS.forEach(key => { payload[key] = payload[key] || null })
+  payload.workflow_steps = payload.workflow_steps && typeof payload.workflow_steps === 'object' ? payload.workflow_steps : {}
   if (!payload.offer_received) payload.offer_received_at = null
   if (!payload.proposed_to_nikolai) payload.proposed_to_nikolai_at = null
   if (!payload.pi_sent) payload.pi_sent_at = null
@@ -300,6 +359,38 @@ function StatusPill({ status }) {
 function ShipmentPill({ status }) {
   const [label, tone] = shipmentMeta[status] || shipmentMeta.not_shipped
   return <span className={`shipment-pill ${tone}`}><i/>{label}</span>
+}
+
+function WorkflowChecklist({ row, editable = false, onToggle, onDateChange }) {
+  const total = WORKFLOW_GROUPS.reduce((sum, group) => sum + group.steps.length, 0)
+  const done = WORKFLOW_GROUPS.reduce((sum, group) => sum + workflowProgress(row, group).done, 0)
+
+  return <section className={`workflow-checklist ${editable ? 'editable' : 'readonly'}`}>
+    <div className="workflow-checklist-head"><div><small>ОПЕРАЦИОННЫЙ МАРШРУТ</small><h3>Подготовка и отгрузка</h3></div><strong>{done}<span> / {total}</span></strong></div>
+    {WORKFLOW_GROUPS.map((group, groupIndex) => {
+      const progress = workflowProgress(row, group)
+      return <details className="workflow-group" key={group.id} defaultOpen={editable || groupIndex === 0}>
+        <summary><div><b>{group.title}</b><small>{group.subtitle}</small></div><div className="workflow-group-progress"><span>{progress.done} / {progress.total}</span><i><em style={{ width: `${progress.percent}%` }}/></i></div></summary>
+        <div className="workflow-step-list">
+          {group.steps.map(([key, label, owner], index) => {
+            const state = workflowStepState(row, key)
+            return <div className={`workflow-step ${state.done ? 'done' : ''}`} key={key}>
+              <button type="button" className="check" disabled={!editable} aria-label={`${state.done ? 'Снять отметку' : 'Отметить'}: ${label}`} onClick={() => onToggle?.(key, !state.done)}>{state.done && <Check size={14}/>}</button>
+              <span className="workflow-step-number">{String(index + 1).padStart(2, '0')}</span>
+              <div><b>{label}</b>{owner && <small>{owner}</small>}</div>
+              {editable && state.done ? <input type="date" value={state.completed_at} onChange={event => onDateChange?.(key, event.target.value)}/> : <time>{state.done ? formatDate(state.completed_at) : '—'}</time>}
+            </div>
+          })}
+        </div>
+      </details>
+    })}
+  </section>
+}
+
+function WorkflowProgressPill({ row }) {
+  const total = WORKFLOW_GROUPS.reduce((sum, group) => sum + group.steps.length, 0)
+  const done = WORKFLOW_GROUPS.reduce((sum, group) => sum + workflowProgress(row, group).done, 0)
+  return <span className={`workflow-progress-pill ${done === total ? 'complete' : ''}`}><i style={{ '--workflow-progress': `${done / total * 100}%` }}/><b>{done}/{total}</b></span>
 }
 
 function RequestJourney({ row, compact = false }) {
@@ -664,6 +755,7 @@ function RequestDetail({ row, onClose, onEdit, canEdit }) {
         <div className="request-detail-title"><span>Цикл запроса и PI</span><small>Обновляется из общей базы</small></div>
         <RequestJourney row={row}/>
       </section>
+      <WorkflowChecklist row={row}/>
       <section className="request-detail-grid">
         <div><Factory/><small>Китайский агент</small><b>{row.agent_name || '—'}</b></div>
         <div><Boxes/><small>Артикулы</small><b>{row.article_numbers || 'Не указаны'}</b></div>
@@ -686,12 +778,13 @@ function RequestDetail({ row, onClose, onEdit, canEdit }) {
 function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = false }) {
   if (!rows.length) return <div className="empty"><PackageOpen size={34}/><b>Запросов пока нет</b><span>Администратор может добавить первую товарную позицию.</span></div>
   return <>
-    <div className="table-wrap request-table-view"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id} onDoubleClick={() => onInspect?.(row)}>
+    <div className="table-wrap request-table-view"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Чек-лист</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id} onDoubleClick={() => onInspect?.(row)}>
       <td><button className="request-number-link" onClick={() => onInspect?.(row)}>{row.request_number}<ChevronRight size={13}/></button></td>
       <td><b>{row.product_name}</b><small>{row.category}{row.article_numbers ? ` · ${row.article_numbers}` : ''}</small></td>
       <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
       <td>{formatDate(row.request_sent_at)}</td>
       <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
+      <td><WorkflowProgressPill row={row}/></td>
       <td><StatusPill status={calcStatus(row)}/></td>
       {!compact && <td><div className="row-actions"><button title="Открыть карточку" onClick={() => onInspect?.(row)}><ChevronRight size={16}/></button>{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> Просмотр</span>}</div></td>}
     </tr>)}</tbody></table></div>
@@ -700,7 +793,7 @@ function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = fa
       <h3>{row.product_name}</h3><p>{row.category}</p>
       <RequestJourney row={row} compact/>
       <div className="mobile-request-meta"><span><Factory size={14}/><small>Агент</small><b>{row.agent_name || '—'}</b></span><span><Clock3 size={14}/><small>Отправлен</small><b>{formatDate(row.request_sent_at)}</b></span></div>
-      <div className="mobile-request-footer"><ShipmentPill status={row.shipment_status}/><button className="inline-edit" onClick={() => onInspect?.(row)}>Открыть карточку <ArrowRight size={14}/></button></div>
+      <div className="mobile-request-footer"><ShipmentPill status={row.shipment_status}/><WorkflowProgressPill row={row}/><button className="inline-edit" onClick={() => onInspect?.(row)}>Открыть карточку <ArrowRight size={14}/></button></div>
     </article>)}</div>
   </>
 }
@@ -816,6 +909,16 @@ function RequestModal({ value, onClose, onSave }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const set = (key, nextValue) => setForm(current => ({ ...current, [key]: nextValue }))
+  const toggleWorkflowStep = (key, done) => setForm(current => {
+    const workflowSteps = { ...(current.workflow_steps || {}) }
+    if (done) workflowSteps[key] = { done: true, completed_at: new Date().toISOString().slice(0, 10) }
+    else delete workflowSteps[key]
+    return { ...current, workflow_steps: workflowSteps }
+  })
+  const setWorkflowDate = (key, completedAt) => setForm(current => ({
+    ...current,
+    workflow_steps: { ...(current.workflow_steps || {}), [key]: { done: true, completed_at: completedAt } }
+  }))
   const checks = [
     ['offer_received', 'Предложение получено', 'offer_received_at'],
     ['included_calculation', 'Внесено в расчёт', null],
@@ -842,6 +945,7 @@ function RequestModal({ value, onClose, onSave }) {
     <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<select required value={form.agent_name} onChange={event => set('agent_name', event.target.value)}><option value="" disabled>Выберите агента</option>{form.agent_name && !AGENT_OPTIONS.includes(form.agent_name) && <option value={form.agent_name}>{form.agent_name} · сохранённый</option>}{AGENT_OPTIONS.map(agent => <option key={agent} value={agent}>{agent}</option>)}</select></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label><label className="full">Артикулы<input value={form.article_numbers || ''} onChange={event => set('article_numbers', event.target.value)} placeholder="Например, AB-1024, AB-1025"/></label></div>
     <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → NIKOLAI → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
     <div className={`deal-outcome ${(form.price_not_viable || form.not_approved) ? 'unsuccessful' : ''}`}><div><small>РЕЗУЛЬТАТ СДЕЛКИ</small><b>{(form.price_not_viable || form.not_approved) ? 'Сделка не успешна' : 'Сделка в работе'}</b></div><label><input type="checkbox" checked={Boolean(form.price_not_viable)} onChange={event => set('price_not_viable', event.target.checked)}/><span>Цена не проходит по нашим методам</span></label><label><input type="checkbox" checked={Boolean(form.not_approved)} onChange={event => set('not_approved', event.target.checked)}/><span>Предложение не согласовано</span></label></div>
+    <WorkflowChecklist row={form} editable onToggle={toggleWorkflowStep} onDateChange={setWorkflowDate}/>
     <div className="stage-title"><span>ЛОГИСТИКА</span><small>CHINA → TRANSIT → WAREHOUSE</small></div>
     <div className="form-grid logistics-form-grid">
       <label>Статус перевозки<select value={form.shipment_status || 'not_shipped'} onChange={event => set('shipment_status', event.target.value)}><option value="not_shipped">Ожидает отправки</option><option value="in_transit">В пути</option><option value="arrived">На складе</option></select></label>
