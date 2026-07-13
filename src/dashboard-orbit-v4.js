@@ -162,18 +162,19 @@ function ensureRoot() {
 }
 
 function activate() {
-  if (active) {
-    ensureRoot()
+  if (active && document.getElementById(ROOT_ID)) return
+  active = true
+  const root = ensureRoot()
+  if (!root) {
+    active = false
+    document.body.classList.remove(BODY_CLASS)
     return
   }
-  active = true
   document.body.classList.add(BODY_CLASS)
-  ensureRoot()
-  window.scrollTo({ top: 0, behavior: 'instant' })
+  window.scrollTo({ top: 0, behavior: 'auto' })
 }
 
 function deactivate() {
-  if (!active) return
   active = false
   document.body.classList.remove(BODY_CLASS)
   document.getElementById(ROOT_ID)?.remove()
@@ -195,9 +196,11 @@ document.addEventListener('click', event => {
 function syncFromApp() {
   mountFrame = 0
   const overview = findNavButton('Обзор')
-  if (overview?.classList.contains('active')) activate()
-  else if (active && !document.querySelector('aside')) deactivate()
-  if (active) ensureRoot()
+  const content = document.querySelector('main.content')
+  const shouldBeActive = Boolean(overview?.classList.contains('active') && content)
+
+  if (shouldBeActive) activate()
+  else if (active || document.body.classList.contains(BODY_CLASS)) deactivate()
 }
 
 function scheduleSync() {
@@ -205,4 +208,9 @@ function scheduleSync() {
 }
 
 scheduleSync()
-new MutationObserver(scheduleSync).observe(document.getElementById('root') || document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] })
+new MutationObserver(scheduleSync).observe(document.getElementById('root') || document.body, {
+  childList: true,
+  subtree: true,
+  attributes: true,
+  attributeFilter: ['class'],
+})
