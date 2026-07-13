@@ -43,10 +43,8 @@ const WORKFLOW_GROUPS = [
   {
     id: 'preparation',
     title: 'Этапы подготовки',
-    subtitle: 'От технического задания до шиппинг-плана',
+    subtitle: 'От обработки запроса до шиппинг-плана',
     steps: [
-      ['create_spec', 'Создать ТЗ'],
-      ['send_spec', 'Отправить'],
       ['process_spec', 'Обработать'],
       ['approve_spec', 'Согласовать'],
       ['request_pi', 'Запросить PI'],
@@ -67,15 +65,9 @@ const WORKFLOW_GROUPS = [
   {
     id: 'shipping',
     title: 'Этапы отгрузки',
-    subtitle: 'Документы, перевозка, склад и контент',
+    subtitle: 'Перевозка, склад и контент',
     steps: [
-      ['prepare_ved_sticker', 'Подготовить стикер', 'ВЭД'],
-      ['prepare_shipping_mark', 'Подготовить Shipping Mark', 'ВЭД'],
-      ['prepare_pl_cl', 'Подготовить PL и CL', 'ВЭД'],
       ['run_freight_tender', 'Провести тендер на перевозку'],
-      ['control_dispatch', 'Контроль отгрузки', 'ВЭД'],
-      ['control_transit', 'Контроль в пути', 'ВЭД'],
-      ['customs_clearance', 'Растаможка', 'ВЭД'],
       ['warehouse_arrival', 'Приход на склад'],
       ['create_product_card', 'Создание карточки'],
       ['upload_content', 'Прогрузка контента'],
@@ -159,6 +151,30 @@ function workflowStepState(row, key) {
 function workflowProgress(row, group) {
   const done = group.steps.reduce((total, [key]) => total + (workflowStepState(row, key).done ? 1 : 0), 0)
   return { done, total: group.steps.length, percent: Math.round(done / group.steps.length * 100) }
+}
+
+function localDateValue() {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10)
+}
+
+function piRequestAgeDays(row) {
+  const requestPi = workflowStepState(row, 'request_pi')
+  if (!requestPi.done || !requestPi.completed_at) return 0
+  const requestedAt = new Date(`${requestPi.completed_at}T00:00:00`)
+  const todayValue = localDateValue()
+  const today = new Date(`${todayValue}T00:00:00`)
+  return Math.max(0, Math.floor((today - requestedAt) / 86400000))
+}
+
+function piRequestIsOverdue(row) {
+  const nextStepDone = workflowStepState(row, 'verify_characteristics').done
+  return piRequestAgeDays(row) >= 2
+    && !nextStepDone
+    && !row.pi_sent
+    && !row.pi_signed
+    && !row.price_not_viable
+    && !row.not_approved
 }
 
 function cleanRequest(form, userId) {
@@ -361,12 +377,12 @@ function ShipmentPill({ status }) {
   return <span className={`shipment-pill ${tone}`}><i/>{label}</span>
 }
 
-function WorkflowChecklist({ row, editable = false, onToggle, onDateChange }) {
+function WorkflowChecklist({ row, editable = false, onToggle, onDateChange, actions = null }) {
   const total = WORKFLOW_GROUPS.reduce((sum, group) => sum + group.steps.length, 0)
   const done = WORKFLOW_GROUPS.reduce((sum, group) => sum + workflowProgress(row, group).done, 0)
 
   return <section className={`workflow-checklist ${editable ? 'editable' : 'readonly'}`}>
-    <div className="workflow-checklist-head"><div><small>ОПЕРАЦИОННЫЙ МАРШРУТ</small><h3>Подготовка и отгрузка</h3></div><strong>{done}<span> / {total}</span></strong></div>
+    <div className="workflow-checklist-head"><div><small>ОПЕРАЦИОННЫЙ МАРШРУТ</small><h3>Подготовка и отгрузка</h3></div><div className="workflow-checklist-head-side"><strong>{done}<span> / {total}</span></strong>{actions}</div></div>
     {WORKFLOW_GROUPS.map((group, groupIndex) => {
       const progress = workflowProgress(row, group)
       return <details className="workflow-group" key={group.id} defaultOpen={editable || groupIndex === 0}>
@@ -378,7 +394,7 @@ function WorkflowChecklist({ row, editable = false, onToggle, onDateChange }) {
               <button type="button" className="check" disabled={!editable} aria-label={`${state.done ? 'Снять отметку' : 'Отметить'}: ${label}`} onClick={() => onToggle?.(key, !state.done)}>{state.done && <Check size={14}/>}</button>
               <span className="workflow-step-number">{String(index + 1).padStart(2, '0')}</span>
               <div><b>{label}</b>{owner && <small>{owner}</small>}</div>
-              {editable && state.done ? <input type="date" value={state.completed_at} onChange={event => onDateChange?.(key, event.target.value)}/> : <time>{state.done ? formatDate(state.completed_at) : '—'}</time>}
+              {editable ? <input type="date" aria-label={`Дата выполнения: ${label}`} value={state.completed_at} onChange={event => onDateChange?.(key, event.target.value)}/> : <time>{state.done ? formatDate(state.completed_at) : '—'}</time>}
             </div>
           })}
         </div>
@@ -391,6 +407,45 @@ function WorkflowProgressPill({ row }) {
   const total = WORKFLOW_GROUPS.reduce((sum, group) => sum + group.steps.length, 0)
   const done = WORKFLOW_GROUPS.reduce((sum, group) => sum + workflowProgress(row, group).done, 0)
   return <span className={`workflow-progress-pill ${done === total ? 'complete' : ''}`}><i style={{ '--workflow-progress': `${done / total * 100}%` }}/><b>{done}/{total}</b></span>
+}
+
+function PiDeadlineAlerts({ rows, onOpenRequests }) {
+  const overdue = useMemo(() => rows.filter(piRequestIsOverdue), [rows])
+  const [permission, setPermission] = useState(() => typeof Notification === 'undefined' ? 'unsupported' : Notification.permission)
+
+  useEffect(() => {
+    if (!overdue.length || permission !== 'granted' || typeof Notification === 'undefined') return
+    const today = localDateValue()
+    let notified = {}
+    try { notified = JSON.parse(localStorage.getItem('violet-pi-notifications') || '{}') }
+    catch { notified = {} }
+    const fresh = overdue.filter(row => notified[row.id] !== today)
+    if (!fresh.length) return
+    const names = fresh.slice(0, 3).map(row => row.request_number).join(', ')
+    try {
+      new Notification('Violet Ledger: PI ожидается больше 2 дней', {
+        body: `${names}${fresh.length > 3 ? ` и ещё ${fresh.length - 3}` : ''}`,
+        tag: `violet-pi-${today}`
+      })
+    } catch { return }
+    fresh.forEach(row => { notified[row.id] = today })
+    localStorage.setItem('violet-pi-notifications', JSON.stringify(notified))
+  }, [overdue, permission])
+
+  async function enableNotifications() {
+    if (typeof Notification === 'undefined') return
+    try {
+      const nextPermission = await Notification.requestPermission()
+      setPermission(nextPermission)
+    } catch { setPermission('unsupported') }
+  }
+
+  if (!overdue.length) return null
+  return <section className="pi-deadline-alert" role="status">
+    <div className="pi-deadline-icon"><CircleAlert/></div>
+    <div><small>КОНТРОЛЬ PI · 2 ДНЯ</small><b>{overdue.length === 1 ? 'PI ожидается больше двух дней' : `${overdue.length} PI ожидаются больше двух дней`}</b><p>{overdue.slice(0, 4).map(row => `${row.request_number} · ${piRequestAgeDays(row)} дн.`).join('  /  ')}</p></div>
+    <div className="pi-deadline-actions">{permission === 'default' && <button type="button" className="secondary" onClick={enableNotifications}>Включить уведомления</button>}<button type="button" className="primary" onClick={onOpenRequests}>Открыть запросы</button></div>
+  </section>
 }
 
 function RequestJourney({ row, compact = false }) {
@@ -736,12 +791,49 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
   </div>
 }
 
-function RequestDetail({ row, onClose, onEdit, canEdit }) {
+function RequestDetail({ row, onClose, onEdit, onSaveWorkflow, canEdit }) {
+  const [workflowEditing, setWorkflowEditing] = useState(false)
+  const [workflowDraft, setWorkflowDraft] = useState(row.workflow_steps || {})
+  const [workflowBusy, setWorkflowBusy] = useState(false)
+  const [workflowError, setWorkflowError] = useState('')
+
   useEffect(() => {
     const closeOnEscape = event => { if (event.key === 'Escape') onClose() }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [onClose])
+
+  useEffect(() => { setWorkflowDraft(row.workflow_steps || {}) }, [row.id, row.workflow_steps])
+
+  const toggleWorkflowStep = (key, done) => setWorkflowDraft(current => {
+    const next = { ...(current || {}) }
+    if (done) next[key] = { done: true, completed_at: localDateValue() }
+    else delete next[key]
+    return next
+  })
+
+  const setWorkflowDate = (key, completedAt) => setWorkflowDraft(current => {
+    const currentRow = { workflow_steps: current || {} }
+    const state = workflowStepState(currentRow, key)
+    return { ...(current || {}), [key]: { done: completedAt ? true : state.done, completed_at: completedAt } }
+  })
+
+  async function saveWorkflow() {
+    setWorkflowBusy(true)
+    setWorkflowError('')
+    try {
+      await onSaveWorkflow(row.id, workflowDraft)
+      setWorkflowEditing(false)
+    } catch (saveError) {
+      setWorkflowError(saveError.message)
+    } finally {
+      setWorkflowBusy(false)
+    }
+  }
+
+  const workflowActions = canEdit && (workflowEditing
+    ? <div className="workflow-inline-actions"><button type="button" className="secondary" disabled={workflowBusy} onClick={() => { setWorkflowDraft(row.workflow_steps || {}); setWorkflowEditing(false); setWorkflowError('') }}>Отмена</button><button type="button" className="primary" disabled={workflowBusy} onClick={saveWorkflow}>{workflowBusy ? 'Сохранение…' : 'Сохранить'}</button></div>
+    : <button type="button" className="workflow-edit-button" onClick={() => setWorkflowEditing(true)}><Pencil size={14}/> Редактировать</button>)
 
   return <div className="request-detail-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <div className="request-detail-drawer" role="dialog" aria-modal="true" aria-label={`Запрос ${row.request_number}`}>
@@ -755,7 +847,8 @@ function RequestDetail({ row, onClose, onEdit, canEdit }) {
         <div className="request-detail-title"><span>Цикл запроса и PI</span><small>Обновляется из общей базы</small></div>
         <RequestJourney row={row}/>
       </section>
-      <WorkflowChecklist row={row}/>
+      <WorkflowChecklist row={{ ...row, workflow_steps: workflowDraft }} editable={workflowEditing} onToggle={toggleWorkflowStep} onDateChange={setWorkflowDate} actions={workflowActions}/>
+      {workflowError && <div className="form-error workflow-inline-error"><CircleAlert size={16}/><div><b>Этапы не сохранены</b><span>{workflowError}</span></div></div>}
       <section className="request-detail-grid">
         <div><Factory/><small>Китайский агент</small><b>{row.agent_name || '—'}</b></div>
         <div><Boxes/><small>Артикулы</small><b>{row.article_numbers || 'Не указаны'}</b></div>
@@ -798,7 +891,7 @@ function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = fa
   </>
 }
 
-function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
+function Requests({ rows, onAdd, onEdit, onDelete, onSaveWorkflow, canEdit, setOpen }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [selected, setSelected] = useState(null)
@@ -819,7 +912,7 @@ function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
       <article><span><Ship/>Сейчас в пути</span><strong>{inTransit}</strong><small>Активные перевозки</small></article>
     </section>
     <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
-    {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} canEdit={canEdit}/>}
+    {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} onSaveWorkflow={onSaveWorkflow} canEdit={canEdit}/>}
   </>
 }
 
@@ -911,13 +1004,13 @@ function RequestModal({ value, onClose, onSave }) {
   const set = (key, nextValue) => setForm(current => ({ ...current, [key]: nextValue }))
   const toggleWorkflowStep = (key, done) => setForm(current => {
     const workflowSteps = { ...(current.workflow_steps || {}) }
-    if (done) workflowSteps[key] = { done: true, completed_at: new Date().toISOString().slice(0, 10) }
+    if (done) workflowSteps[key] = { done: true, completed_at: localDateValue() }
     else delete workflowSteps[key]
     return { ...current, workflow_steps: workflowSteps }
   })
   const setWorkflowDate = (key, completedAt) => setForm(current => ({
     ...current,
-    workflow_steps: { ...(current.workflow_steps || {}), [key]: { done: true, completed_at: completedAt } }
+    workflow_steps: { ...(current.workflow_steps || {}), [key]: { done: completedAt ? true : workflowStepState(current, key).done, completed_at: completedAt } }
   }))
   const checks = [
     ['offer_received', 'Предложение получено', 'offer_received_at'],
@@ -1061,6 +1154,13 @@ function App() {
     await loadRows()
   }
 
+  async function saveWorkflow(requestId, workflowSteps) {
+    if (profile.role !== 'admin') throw new Error('Изменения может вносить только администратор.')
+    const { error } = await supabase.from('requests').update({ workflow_steps: workflowSteps || {}, updated_by: session.user.id }).eq('id', requestId)
+    if (error) throw new Error(friendlyError(error))
+    await loadRows()
+  }
+
   async function remove(row) {
     if (profile.role !== 'admin') return
     if (!confirm(`Удалить запрос ${row.request_number}?`)) return
@@ -1074,7 +1174,7 @@ function App() {
   if (!profile) return <div className="access-denied"><ShieldCheck size={40}/><h2>Проверяем доступ</h2><p>{dataError || 'Если экран не меняется, ваш email ещё не добавлен администратором.'}</p><button className="secondary" onClick={() => supabase.auth.signOut()}>ВЫЙТИ</button></div>
 
   const canEdit = profile.role === 'admin'
-  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} onOpenLogistics={() => setPage('logistics')} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
+  return <div className="app-shell"><Sidebar page={page} setPage={setPage} profile={profile} open={sideOpen} setOpen={setSideOpen}/><main className="content">{dataError && <div className="form-error global-error"><CircleAlert size={17}/><div><b>Ошибка загрузки данных</b><span>{dataError}</span></div></div>}<PiDeadlineAlerts rows={rows} onOpenRequests={() => setPage('requests')}/>{page === 'dashboard' && <Dashboard rows={rows} onAdd={() => setModal({ ...EMPTY })} onOpenLogistics={() => setPage('logistics')} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'analytics' && <Analytics rows={rows} setOpen={setSideOpen}/>} {page === 'logistics' && <Logistics rows={rows} onEdit={setLogisticsModal} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'requests' && <Requests rows={rows} onAdd={() => setModal({ ...EMPTY })} onEdit={setModal} onDelete={remove} onSaveWorkflow={saveWorkflow} canEdit={canEdit} setOpen={setSideOpen}/>} {page === 'users' && canEdit && <UsersPage profile={profile} setOpen={setSideOpen}/>} {page === 'audit' && <AuditPage setOpen={setSideOpen}/>}</main>{modal && canEdit && <RequestModal value={modal} onClose={() => setModal(null)} onSave={save}/>} {logisticsModal && canEdit && <LogisticsModal value={logisticsModal} onClose={() => setLogisticsModal(null)} onSave={save}/>}</div>
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>)
