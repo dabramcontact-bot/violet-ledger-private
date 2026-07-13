@@ -36,6 +36,7 @@ create table public.requests (
   proposed_to_nikolai_at date,
   price_not_viable boolean not null default false,
   not_approved boolean not null default false,
+  workflow_steps jsonb not null default '{}'::jsonb check (jsonb_typeof(workflow_steps) = 'object'),
   pi_sent boolean not null default false,
   pi_sent_at date,
   pi_revision boolean not null default false,
