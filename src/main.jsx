@@ -305,29 +305,33 @@ function usePhantomMotion() {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const revealItems = [...story.querySelectorAll('[data-reveal]')]
     const hero = story.querySelector('.animated-hero')
+    const ribbonField = story.querySelector('.ribbon-field')
+    const ribbons = [...story.querySelectorAll('.ribbon')]
+    story.classList.add('js-ribbon-motion')
 
+    let observer = null
+    let revealFallback = 0
     if (reducedMotion) {
       story.classList.add('story-ready', 'reduce-motion')
       revealItems.forEach(item => item.classList.add('is-visible'))
-      return undefined
+    } else {
+      observer = new IntersectionObserver(entries => {
+        entries.forEach(entry => {
+          if (!entry.isIntersecting) return
+          entry.target.classList.add('is-visible')
+          observer.unobserve(entry.target)
+        })
+      }, { threshold: 0.08, rootMargin: '0px 0px -9% 0px' })
+
+      revealItems.forEach(item => observer.observe(item))
+      requestAnimationFrame(() => story.classList.add('story-ready'))
+
+      revealFallback = window.setTimeout(() => {
+        revealItems.forEach(item => {
+          if (item.getBoundingClientRect().top < window.innerHeight * 1.15) item.classList.add('is-visible')
+        })
+      }, 1400)
     }
-
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (!entry.isIntersecting) return
-        entry.target.classList.add('is-visible')
-        observer.unobserve(entry.target)
-      })
-    }, { threshold: 0.08, rootMargin: '0px 0px -9% 0px' })
-
-    revealItems.forEach(item => observer.observe(item))
-    requestAnimationFrame(() => story.classList.add('story-ready'))
-
-    const revealFallback = window.setTimeout(() => {
-      revealItems.forEach(item => {
-        if (item.getBoundingClientRect().top < window.innerHeight * 1.15) item.classList.add('is-visible')
-      })
-    }, 1400)
 
     let frame = 0
     const updateParallax = () => {
@@ -336,11 +340,13 @@ function usePhantomMotion() {
       const rect = hero.getBoundingClientRect()
       const distance = Math.max(hero.offsetHeight - window.innerHeight * 0.32, 1)
       const progress = Math.min(1, Math.max(0, -rect.top / distance))
-      story.style.setProperty('--hero-shift', `${Math.round(progress * -82)}px`)
-      story.style.setProperty('--layer-two-shift', `${Math.round(progress * -30)}px`)
-      story.style.setProperty('--layer-three-shift', `${Math.round(progress * -16)}px`)
-      story.style.setProperty('--hero-copy-shift', `${Math.round(progress * -26)}px`)
-      story.style.setProperty('--hero-copy-opacity', String(1 - Math.min(progress * .48, .42)))
+      if (!reducedMotion) {
+        story.style.setProperty('--hero-shift', `${Math.round(progress * -82)}px`)
+        story.style.setProperty('--layer-two-shift', `${Math.round(progress * -30)}px`)
+        story.style.setProperty('--layer-three-shift', `${Math.round(progress * -16)}px`)
+        story.style.setProperty('--hero-copy-shift', `${Math.round(progress * -26)}px`)
+        story.style.setProperty('--hero-copy-opacity', String(1 - Math.min(progress * .48, .42)))
+      }
 
       story.querySelectorAll('[data-scene]').forEach(scene => {
         const sceneRect = scene.getBoundingClientRect()
@@ -357,11 +363,66 @@ function usePhantomMotion() {
     window.addEventListener('scroll', requestParallax, { passive: true })
     window.addEventListener('resize', requestParallax)
 
+    let ribbonFrame = 0
+    let ribbonsActive = true
+    let motionEpoch = performance.now()
+    const motionScale = reducedMotion ? 0.24 : 1
+    const motionSpeed = reducedMotion ? 0.35 : 1
+
+    const animateRibbons = now => {
+      ribbonFrame = 0
+      if (!ribbonsActive || document.hidden || !ribbonField || !ribbons.length) return
+      const time = ((now - motionEpoch) / 1000) * motionSpeed
+      const fieldX = Math.sin(time * .52) * 22 * motionScale
+      const fieldY = Math.cos(time * .41) * 14 * motionScale
+      const fieldScale = 1 + Math.sin(time * .31) * .035 * motionScale
+      const fieldAngle = Math.sin(time * .27) * 1.6 * motionScale
+      ribbonField.setAttribute('transform', `translate(${fieldX.toFixed(2)} ${fieldY.toFixed(2)}) scale(${fieldScale.toFixed(4)}) rotate(${fieldAngle.toFixed(2)} 600 340)`)
+
+      ribbons.forEach((ribbon, index) => {
+        const phase = index * 1.17
+        const x = Math.sin(time * (.68 + index * .035) + phase) * (34 + index * 3) * motionScale
+        const y = Math.cos(time * (.57 + index * .028) + phase) * (23 + index * 2) * motionScale
+        const angle = Math.sin(time * (.49 + index * .02) + phase) * 2.7 * motionScale
+        ribbon.setAttribute('transform', `translate(${x.toFixed(2)} ${y.toFixed(2)}) rotate(${angle.toFixed(2)} 600 340)`)
+      })
+      ribbonFrame = requestAnimationFrame(animateRibbons)
+    }
+
+    const startRibbonMotion = () => {
+      if (!ribbonFrame && ribbonsActive && !document.hidden) ribbonFrame = requestAnimationFrame(animateRibbons)
+    }
+    const stopRibbonMotion = () => {
+      if (ribbonFrame) cancelAnimationFrame(ribbonFrame)
+      ribbonFrame = 0
+    }
+    const ribbonObserver = new IntersectionObserver(([entry]) => {
+      ribbonsActive = entry.isIntersecting
+      if (ribbonsActive) startRibbonMotion()
+      else stopRibbonMotion()
+    }, { threshold: 0.01 })
+    if (hero) ribbonObserver.observe(hero)
+
+    const resumeRibbonMotion = () => {
+      if (document.hidden) stopRibbonMotion()
+      else {
+        motionEpoch = performance.now()
+        startRibbonMotion()
+      }
+    }
+    document.addEventListener('visibilitychange', resumeRibbonMotion)
+    window.addEventListener('pageshow', resumeRibbonMotion)
+    startRibbonMotion()
+
     return () => {
-      observer.disconnect()
-      window.clearTimeout(revealFallback)
+      observer?.disconnect()
+      ribbonObserver.disconnect()
+      if (revealFallback) window.clearTimeout(revealFallback)
       window.removeEventListener('scroll', requestParallax)
       window.removeEventListener('resize', requestParallax)
+      document.removeEventListener('visibilitychange', resumeRibbonMotion)
+      window.removeEventListener('pageshow', resumeRibbonMotion)
+      stopRibbonMotion()
       if (frame) cancelAnimationFrame(frame)
     }
   }, [])
