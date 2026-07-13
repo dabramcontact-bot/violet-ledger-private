@@ -11,7 +11,6 @@ const PALETTE = [
   'rgba(23, 99, 79, .62)',
   'rgba(173, 142, 84, .48)',
   'rgba(97, 78, 157, .58)',
-  'rgba(85, 129, 175, .42)',
 ]
 
 function supportsReducedMotion() {
@@ -40,10 +39,10 @@ function attachRibbonCanvas(hero) {
 
   const reduced = supportsReducedMotion()
   const economical = lowPowerDevice()
-  const targetFps = reduced ? 12 : economical ? 30 : 45
+  const targetFps = reduced ? 10 : economical ? 28 : 40
   const frameInterval = 1000 / targetFps
-  const ribbonCount = reduced ? 4 : economical ? 5 : 7
-  const maxDpr = economical ? 1 : 1.25
+  const ribbonCount = reduced ? 4 : economical ? 5 : 6
+  const maxDpr = economical ? 1 : 1.15
 
   let width = 1
   let height = 1
@@ -61,13 +60,13 @@ function attachRibbonCanvas(hero) {
 
   const ribbons = Array.from({ length: ribbonCount }, (_, index) => ({
     color: PALETTE[index % PALETTE.length],
-    width: 56 + index * 9,
-    baseY: .14 + index * .115,
-    speed: .18 + index * .035,
+    width: 54 + index * 9,
+    baseY: .13 + index * .145,
+    speed: .30 + index * .045,
     phase: index * 1.37,
-    amplitude: .07 + (index % 3) * .018,
-    drift: .05 + (index % 2) * .025,
-    tilt: (index % 2 ? -1 : 1) * (.06 + index * .006),
+    amplitude: .08 + (index % 3) * .022,
+    drift: .09 + (index % 2) * .04,
+    tilt: (index % 2 ? -1 : 1) * (.07 + index * .008),
   }))
 
   function resize() {
@@ -89,23 +88,26 @@ function attachRibbonCanvas(hero) {
 
   function drawRibbon(ribbon, index, time) {
     const phase = time * ribbon.speed + ribbon.phase
-    const secondary = time * (ribbon.speed * .63) + ribbon.phase * .71
+    const secondary = time * (ribbon.speed * .71) + ribbon.phase * .73
 
-    const horizontalFlight = Math.sin(phase * .72) * width * ribbon.drift
-    const pointerShiftX = pointerX * (8 + index * 2.2)
-    const pointerShiftY = pointerY * (5 + index * 1.4)
+    const horizontalFlight = (
+      Math.sin(phase * .76) * ribbon.drift +
+      Math.cos(secondary * .43) * ribbon.drift * .42
+    ) * width
+    const pointerShiftX = pointerX * (9 + index * 2.4)
+    const pointerShiftY = pointerY * (6 + index * 1.5)
 
-    const startX = -width * .28 + horizontalFlight + pointerShiftX
-    const endX = width * 1.28 + horizontalFlight + pointerShiftX
+    const startX = -width * .32 + horizontalFlight + pointerShiftX
+    const endX = width * 1.32 + horizontalFlight + pointerShiftX
     const baseY = height * ribbon.baseY + pointerShiftY
     const verticalWave = Math.sin(phase) * height * ribbon.amplitude
-    const startY = baseY + verticalWave + Math.cos(secondary) * height * .035
-    const endY = baseY - verticalWave + Math.sin(secondary * 1.13) * height * .045
+    const startY = baseY + verticalWave + Math.cos(secondary) * height * .045
+    const endY = baseY - verticalWave + Math.sin(secondary * 1.17) * height * .055
 
-    const cp1X = width * (.20 + Math.sin(secondary * .83) * .075) + horizontalFlight
-    const cp2X = width * (.80 + Math.cos(secondary * .91) * .075) + horizontalFlight
-    const cp1Y = baseY + height * (ribbon.tilt + Math.sin(phase * 1.17) * .18)
-    const cp2Y = baseY + height * (-ribbon.tilt + Math.cos(phase * .94) * .18)
+    const cp1X = width * (.18 + Math.sin(secondary * .91) * .11) + horizontalFlight
+    const cp2X = width * (.82 + Math.cos(secondary * .83) * .11) + horizontalFlight
+    const cp1Y = baseY + height * (ribbon.tilt + Math.sin(phase * 1.22) * .22)
+    const cp2Y = baseY + height * (-ribbon.tilt + Math.cos(phase * 1.03) * .22)
 
     ctx.beginPath()
     ctx.moveTo(startX, startY)
@@ -126,8 +128,8 @@ function attachRibbonCanvas(hero) {
     }
     lastFrame = now
 
-    pointerX += (pointerTargetX - pointerX) * .045
-    pointerY += (pointerTargetY - pointerY) * .045
+    pointerX += (pointerTargetX - pointerX) * .055
+    pointerY += (pointerTargetY - pointerY) * .055
 
     ctx.clearRect(0, 0, width, height)
     const time = now / 1000
