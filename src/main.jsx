@@ -16,7 +16,9 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
 
 const EMPTY = {
   request_number: '', category: '', product_name: '', agent_name: '', request_sent_at: '',
-  offer_received: false, offer_received_at: '', included_calculation: false,
+  article_numbers: '', offer_received: false, offer_received_at: '', included_calculation: false,
+  proposed_to_nikolai: false, proposed_to_nikolai_at: '',
+  price_not_viable: false, not_approved: false,
   pi_sent: false, pi_sent_at: '', pi_revision: false, pi_revision_at: '',
   pi_signed: false, pi_signed_at: '', notes: '',
   shipment_status: 'not_shipped', logistics_company: '', transit_started_at: '',
@@ -37,7 +39,7 @@ const AGENT_OPTIONS = [
 ]
 
 const DATE_FIELDS = [
-  'request_sent_at', 'offer_received_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at',
+  'request_sent_at', 'offer_received_at', 'proposed_to_nikolai_at', 'pi_sent_at', 'pi_revision_at', 'pi_signed_at',
   'transit_started_at', 'expected_warehouse_at', 'warehouse_arrived_at'
 ]
 const roleLabel = { admin: 'Администратор', editor: 'Просмотр', viewer: 'Просмотр' }
@@ -45,9 +47,11 @@ const statusMeta = {
   request: ['Запрос отправлен', '01'],
   offer: ['Предложение получено', '02'],
   calculation: ['В расчёте', '03'],
-  pi_sent: ['PI отправлена', '04'],
-  revision: ['PI на доработке', '05'],
-  signed: ['PI подписана', '06']
+  proposed: ['Предложено Николаю', '04'],
+  pi_sent: ['PI отправлена', '05'],
+  revision: ['PI на доработке', '06'],
+  signed: ['PI подписана', '07'],
+  unsuccessful: ['Сделка не успешна', '×']
 }
 
 const shipmentMeta = {
@@ -60,6 +64,7 @@ const requestStageDefs = [
   ['request', 'Запрос', 'request_sent_at'],
   ['offer', 'Предложение', 'offer_received_at'],
   ['calculation', 'Расчёт', null],
+  ['proposed', 'Николаю', 'proposed_to_nikolai_at'],
   ['pi_sent', 'PI', 'pi_sent_at'],
   ['revision', 'Доработка', 'pi_revision_at'],
   ['signed', 'Подписана', 'pi_signed_at']
@@ -77,18 +82,22 @@ function requestStages(row = {}) {
         ? Boolean(row.offer_received)
         : key === 'calculation'
           ? Boolean(row.included_calculation)
-          : key === 'pi_sent'
-            ? Boolean(row.pi_sent)
-            : key === 'revision'
-              ? Boolean(row.pi_revision)
-              : Boolean(row.pi_signed)
+          : key === 'proposed'
+            ? Boolean(row.proposed_to_nikolai)
+            : key === 'pi_sent'
+              ? Boolean(row.pi_sent)
+              : key === 'revision'
+                ? Boolean(row.pi_revision)
+                : Boolean(row.pi_signed)
   }))
 }
 
 function calcStatus(row) {
+  if (row.price_not_viable || row.not_approved) return 'unsuccessful'
   if (row.pi_signed) return 'signed'
   if (row.pi_revision) return 'revision'
   if (row.pi_sent) return 'pi_sent'
+  if (row.proposed_to_nikolai) return 'proposed'
   if (row.included_calculation) return 'calculation'
   if (row.offer_received) return 'offer'
   return 'request'
@@ -96,11 +105,12 @@ function calcStatus(row) {
 
 function cleanRequest(form, userId) {
   const payload = { ...form, updated_by: userId }
-  ;['request_number', 'category', 'product_name', 'agent_name', 'notes', 'logistics_company'].forEach(key => {
+  ;['request_number', 'category', 'product_name', 'agent_name', 'article_numbers', 'notes', 'logistics_company'].forEach(key => {
     payload[key] = String(payload[key] || '').trim()
   })
   DATE_FIELDS.forEach(key => { payload[key] = payload[key] || null })
   if (!payload.offer_received) payload.offer_received_at = null
+  if (!payload.proposed_to_nikolai) payload.proposed_to_nikolai_at = null
   if (!payload.pi_sent) payload.pi_sent_at = null
   if (!payload.pi_revision) payload.pi_revision_at = null
   if (!payload.pi_signed) payload.pi_signed_at = null
@@ -564,7 +574,7 @@ function usePhantomMotion() {
 }
 
 function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
-  const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, pi_sent: 0, revision: 0, signed: 0 }), [rows])
+  const counts = useMemo(() => rows.reduce((acc, row) => { acc[calcStatus(row)] += 1; return acc }, { request: 0, offer: 0, calculation: 0, proposed: 0, pi_sent: 0, revision: 0, signed: 0, unsuccessful: 0 }), [rows])
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   const arrived = rows.filter(row => row.shipment_status === 'arrived').length
   const supplierCount = new Set(rows.map(row => row.agent_name).filter(Boolean)).size
@@ -591,7 +601,7 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
         <article className="story-card story-blue" data-reveal="card" style={{ '--reveal-delay': '0ms' }}>
           <h3>Все запросы<br/>в одном месте.</h3>
           <div className="story-cloud"><Package/><span>{rows.length}</span></div>
-          <div className="story-floating-pill"><ClipboardList/><small>Активные запросы</small><strong>{rows.length - counts.signed}</strong></div>
+          <div className="story-floating-pill"><ClipboardList/><small>Активные запросы</small><strong>{rows.length - counts.signed - counts.unsuccessful}</strong></div>
         </article>
         <article className="story-card story-violet" data-reveal="card" style={{ '--reveal-delay': '110ms' }}>
           <h3>PI движется быстро.<br/>Даже после правок.</h3>
@@ -656,10 +666,13 @@ function RequestDetail({ row, onClose, onEdit, canEdit }) {
       </section>
       <section className="request-detail-grid">
         <div><Factory/><small>Китайский агент</small><b>{row.agent_name || '—'}</b></div>
+        <div><Boxes/><small>Артикулы</small><b>{row.article_numbers || 'Не указаны'}</b></div>
         <div><Clock3/><small>Запрос отправлен</small><b>{formatDate(row.request_sent_at)}</b></div>
+        <div><Users/><small>Предложено Николаю</small><b>{row.proposed_to_nikolai ? formatDate(row.proposed_to_nikolai_at) : 'Нет'}</b></div>
         <div><Truck/><small>Логистика</small><b>{row.logistics_company || 'Не назначена'}</b></div>
         <div><Warehouse/><small>Состояние поставки</small><b>{shipmentMeta[row.shipment_status]?.[0] || shipmentMeta.not_shipped[0]}</b></div>
       </section>
+      {(row.price_not_viable || row.not_approved) && <section className="request-detail-failure"><CircleAlert/><div><small>СДЕЛКА НЕ УСПЕШНА</small><p>{[row.price_not_viable && 'Цена не проходит по нашим методам', row.not_approved && 'Предложение не согласовано'].filter(Boolean).join(' · ')}</p></div></section>}
       <section className="request-detail-section request-detail-route">
         <div className="request-detail-title"><span>Маршрут поставки</span><ShipmentPill status={row.shipment_status}/></div>
         <div className="detail-route-track"><span className="done"><Factory/><b>Фабрика</b></span><i/><span className={row.shipment_status !== 'not_shipped' ? 'done' : ''}><Ship/><b>В пути</b></span><i/><span className={row.shipment_status === 'arrived' ? 'done' : ''}><Warehouse/><b>Склад</b></span></div>
@@ -675,7 +688,7 @@ function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = fa
   return <>
     <div className="table-wrap request-table-view"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id} onDoubleClick={() => onInspect?.(row)}>
       <td><button className="request-number-link" onClick={() => onInspect?.(row)}>{row.request_number}<ChevronRight size={13}/></button></td>
-      <td><b>{row.product_name}</b><small>{row.category}</small></td>
+      <td><b>{row.product_name}</b><small>{row.category}{row.article_numbers ? ` · ${row.article_numbers}` : ''}</small></td>
       <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
       <td>{formatDate(row.request_sent_at)}</td>
       <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
@@ -696,9 +709,10 @@ function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const [selected, setSelected] = useState(null)
-  const filtered = rows.filter(row => (status === 'all' || calcStatus(row) === status) && [row.request_number, row.product_name, row.category, row.agent_name].join(' ').toLowerCase().includes(query.toLowerCase()))
+  const filtered = rows.filter(row => (status === 'all' || calcStatus(row) === status) && [row.request_number, row.product_name, row.category, row.agent_name, row.article_numbers].join(' ').toLowerCase().includes(query.toLowerCase()))
   const revision = rows.filter(row => row.pi_revision && !row.pi_signed).length
   const signed = rows.filter(row => row.pi_signed).length
+  const unsuccessful = rows.filter(row => row.price_not_viable || row.not_approved).length
   const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
 
   return <>
@@ -708,9 +722,10 @@ function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
       <article><span><ClipboardList/>Всего запросов</span><strong>{rows.length}</strong><small>В общей базе</small></article>
       <article><span><FilePenLine/>На доработке</span><strong>{revision}</strong><small>Требуют внимания</small></article>
       <article><span><FileCheck2/>PI подписано</span><strong>{signed}</strong><small>Готовы к следующему шагу</small></article>
+      <article><span><CircleAlert/>Сделка не успешна</span><strong>{unsuccessful}</strong><small>Цена не прошла или не согласовано</small></article>
       <article><span><Ship/>Сейчас в пути</span><strong>{inTransit}</strong><small>Активные перевозки</small></article>
     </section>
-    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
+    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, артикул, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
     {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} canEdit={canEdit}/>}
   </>
 }
@@ -797,13 +812,14 @@ function LogisticsModal({ value, onClose, onSave }) {
 }
 
 function RequestModal({ value, onClose, onSave }) {
-  const [form, setForm] = useState(value || EMPTY)
+  const [form, setForm] = useState({ ...EMPTY, ...(value || {}) })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const set = (key, nextValue) => setForm(current => ({ ...current, [key]: nextValue }))
   const checks = [
     ['offer_received', 'Предложение получено', 'offer_received_at'],
     ['included_calculation', 'Внесено в расчёт', null],
+    ['proposed_to_nikolai', 'Предложено Николаю', 'proposed_to_nikolai_at'],
     ['pi_sent', 'PI отправлена', 'pi_sent_at'],
     ['pi_revision', 'PI отправлена на доработку', 'pi_revision_at'],
     ['pi_signed', 'PI подписана', 'pi_signed_at']
@@ -823,8 +839,9 @@ function RequestModal({ value, onClose, onSave }) {
 
   return <div className="modal-backdrop"><div className="modal request-editor"><div className="modal-head"><div><div className="eyebrow"><Package size={14}/> КАРТОЧКА ЗАКУПКИ</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2><p>{value?.id ? `${form.request_number} · ${form.product_name}` : 'Добавьте основную информацию и отметьте текущий этап.'}</p></div><button aria-label="Закрыть" onClick={onClose}><X/></button></div><form onSubmit={submit}>
     <div className="request-editor-journey"><div><small>ТЕКУЩИЙ ПРОГРЕСС</small><b>{statusMeta[calcStatus(form)]?.[0]}</b></div><RequestJourney row={form} compact/></div>
-    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<select required value={form.agent_name} onChange={event => set('agent_name', event.target.value)}><option value="" disabled>Выберите агента</option>{form.agent_name && !AGENT_OPTIONS.includes(form.agent_name) && <option value={form.agent_name}>{form.agent_name} · сохранённый</option>}{AGENT_OPTIONS.map(agent => <option key={agent} value={agent}>{agent}</option>)}</select></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
-    <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
+    <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<select required value={form.agent_name} onChange={event => set('agent_name', event.target.value)}><option value="" disabled>Выберите агента</option>{form.agent_name && !AGENT_OPTIONS.includes(form.agent_name) && <option value={form.agent_name}>{form.agent_name} · сохранённый</option>}{AGENT_OPTIONS.map(agent => <option key={agent} value={agent}>{agent}</option>)}</select></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label><label className="full">Артикулы<input value={form.article_numbers || ''} onChange={event => set('article_numbers', event.target.value)} placeholder="Например, AB-1024, AB-1025"/></label></div>
+    <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → NIKOLAI → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
+    <div className={`deal-outcome ${(form.price_not_viable || form.not_approved) ? 'unsuccessful' : ''}`}><div><small>РЕЗУЛЬТАТ СДЕЛКИ</small><b>{(form.price_not_viable || form.not_approved) ? 'Сделка не успешна' : 'Сделка в работе'}</b></div><label><input type="checkbox" checked={Boolean(form.price_not_viable)} onChange={event => set('price_not_viable', event.target.checked)}/><span>Цена не проходит по нашим методам</span></label><label><input type="checkbox" checked={Boolean(form.not_approved)} onChange={event => set('not_approved', event.target.checked)}/><span>Предложение не согласовано</span></label></div>
     <div className="stage-title"><span>ЛОГИСТИКА</span><small>CHINA → TRANSIT → WAREHOUSE</small></div>
     <div className="form-grid logistics-form-grid">
       <label>Статус перевозки<select value={form.shipment_status || 'not_shipped'} onChange={event => set('shipment_status', event.target.value)}><option value="not_shipped">Ожидает отправки</option><option value="in_transit">В пути</option><option value="arrived">На складе</option></select></label>
