@@ -1,0 +1,122 @@
+/* Live operational statuses inside analytics category cards. */
+
+.analytics-v2-category-card {
+  min-height: 238px;
+}
+
+.analytics-v2-status-strip {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.analytics-v2-status-chip {
+  min-width: 0;
+  padding: 8px 9px;
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(65, 51, 95, .07);
+  border-radius: 11px;
+  color: #5f576b;
+  background: rgba(248, 247, 251, .94);
+  box-shadow: inset 0 1px rgba(255,255,255,.88);
+}
+
+.analytics-v2-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a49cae;
+}
+
+.analytics-v2-status-chip small {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 8px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: .015em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.analytics-v2-status-chip strong {
+  color: #3a304b;
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 750;
+}
+
+.analytics-v2-status-chip.tone-blue {
+  color: #60718d;
+  background: #f2f6fc;
+}
+.analytics-v2-status-chip.tone-blue .analytics-v2-status-dot { background: #7d9ac9; }
+
+.analytics-v2-status-chip.tone-green {
+  color: #55766c;
+  background: #f0f7f4;
+}
+.analytics-v2-status-chip.tone-green .analytics-v2-status-dot { background: #64a08f; }
+
+.analytics-v2-status-chip.tone-violet {
+  color: #6b5c91;
+  background: #f4f0fb;
+}
+.analytics-v2-status-chip.tone-violet .analytics-v2-status-dot { background: #8d78c9; }
+
+.analytics-v2-status-chip.tone-amber {
+  color: #866d58;
+  background: #fbf6ef;
+}
+.analytics-v2-status-chip.tone-amber .analytics-v2-status-dot { background: #bf9368; }
+
+.analytics-v2-status-chip.tone-red {
+  color: #8a625d;
+  background: #fbf3f2;
+}
+.analytics-v2-status-chip.tone-red .analytics-v2-status-dot { background: #c27a70; }
+
+.analytics-v2-status-chip.is-attention {
+  border-color: rgba(182, 106, 86, .20);
+  box-shadow: 0 7px 16px rgba(151, 83, 68, .08), inset 0 1px rgba(255,255,255,.9);
+}
+
+.analytics-v2-category-card.has-status-attention {
+  border-color: rgba(176, 103, 84, .20);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(193, 117, 91, .07), transparent 34%),
+    #fff;
+}
+
+.analytics-v2-category-card.has-status-attention .analytics-v2-category-footer > span {
+  color: #a15f4e;
+}
+
+.analytics-v2-category-card.has-status-attention .analytics-v2-category-footer > b {
+  color: #9a5d4d;
+  background: #f6e8e3;
+}
+
+@media (max-width: 640px) {
+  .analytics-v2-category-card {
+    min-height: 226px;
+  }
+
+  .analytics-v2-status-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 390px) {
+  .analytics-v2-status-chip {
+    padding: 7px 8px;
+  }
+
+  .analytics-v2-status-chip small {
+    font-size: 7px;
+  }
+}
