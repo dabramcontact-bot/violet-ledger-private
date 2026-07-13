@@ -43,6 +43,35 @@ const shipmentMeta = {
   arrived: ['На складе', 'arrived']
 }
 
+const requestStageDefs = [
+  ['request', 'Запрос', 'request_sent_at'],
+  ['offer', 'Предложение', 'offer_received_at'],
+  ['calculation', 'Расчёт', null],
+  ['pi_sent', 'PI', 'pi_sent_at'],
+  ['revision', 'Доработка', 'pi_revision_at'],
+  ['signed', 'Подписана', 'pi_signed_at']
+]
+
+function requestStages(row = {}) {
+  return requestStageDefs.map(([key, label, dateKey], index) => ({
+    key,
+    label,
+    dateKey,
+    date: dateKey ? row[dateKey] : null,
+    done: index === 0
+      ? Boolean(row.request_number || row.request_sent_at)
+      : key === 'offer'
+        ? Boolean(row.offer_received)
+        : key === 'calculation'
+          ? Boolean(row.included_calculation)
+          : key === 'pi_sent'
+            ? Boolean(row.pi_sent)
+            : key === 'revision'
+              ? Boolean(row.pi_revision)
+              : Boolean(row.pi_signed)
+  }))
+}
+
 function calcStatus(row) {
   if (row.pi_signed) return 'signed'
   if (row.pi_revision) return 'revision'
@@ -183,24 +212,31 @@ function Login() {
   }
 
   return <div className="login-page">
-    <div className="arrow-field" aria-hidden="true">{Array.from({ length: 12 }, (_, i) => <span key={i}>{'>' .repeat(10 + i)}</span>)}</div>
     <div className="login-brand"><div className="logo">VL</div><div><b>VIOLET LEDGER</b><small>CHINA PROCUREMENT OS</small></div></div>
-    <main className="login-card terminal-card">
-      <div className="terminal-line">~/procurement/auth <span>_</span></div>
-      <div className="eyebrow"><ShieldCheck size={15}/> ЗАЩИЩЁННОЕ ПРОСТРАНСТВО</div>
-      <h1>{mode === 'login' ? 'Вход в систему' : 'Новый аккаунт'}</h1>
-      <p>{mode === 'login' ? 'Контроль товаров, агентов, логистики и PI.' : 'Регистрация доступна только для приглашённых пользователей.'}</p>
+    <section className="login-visual" aria-label="Маршрут закупки">
+      <div className="login-ribbons" aria-hidden="true"><i/><i/><i/><i/></div>
+      <div className="login-visual-copy">
+        <small>PRIVATE PROCUREMENT NETWORK</small>
+        <h1>Весь путь товара.<br/>В одном ритме.</h1>
+        <p>Запрос, агент, PI, логистика и склад — в защищённом пространстве вашей команды.</p>
+      </div>
+      <div className="login-route"><Factory/><span>Китай</span><i/><FileCheck2/><span>PI</span><i/><Warehouse/><span>Склад</span></div>
+    </section>
+    <main className="login-card">
+      <div className="login-card-top"><div className="eyebrow"><ShieldCheck size={15}/> ДОСТУП ПО ПРИГЛАШЕНИЮ</div><span>VL / 02</span></div>
+      <h2>{mode === 'login' ? 'С возвращением.' : 'Создайте аккаунт.'}</h2>
+      <p>{mode === 'login' ? 'Войдите, чтобы продолжить работу с закупками.' : 'Регистрация доступна только для приглашённых пользователей.'}</p>
       <form onSubmit={submit}>
-        <label>Email<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="name@company.com"/></label>
-        <label>Пароль<input type="password" required minLength="8" value={password} onChange={event => setPassword(event.target.value)} placeholder="Не менее 8 символов"/></label>
+        <label>Email<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="name@company.com" autoComplete="email"/></label>
+        <label>Пароль<input type="password" required minLength="8" value={password} onChange={event => setPassword(event.target.value)} placeholder="Не менее 8 символов" autoComplete={mode === 'login' ? 'current-password' : 'new-password'}/></label>
         {message && <div className="auth-message"><CircleAlert size={16}/>{message}</div>}
-        <button className="primary wide" disabled={busy}>{busy ? 'ПОДОЖДИТЕ…' : mode === 'login' ? 'ВОЙТИ →' : 'СОЗДАТЬ АККАУНТ →'}</button>
+        <button className="primary wide" disabled={busy}>{busy ? 'Подождите…' : mode === 'login' ? 'Войти в Violet Ledger' : 'Создать аккаунт'}<ArrowRight size={16}/></button>
       </form>
       <button className="link-button" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setMessage('') }}>
-        {mode === 'login' ? 'Получили приглашение? Создать аккаунт →' : 'Уже есть аккаунт? Войти →'}
+        {mode === 'login' ? 'Получили приглашение? Создать аккаунт' : 'Уже есть аккаунт? Войти'}
       </button>
+      <div className="login-security"><ShieldCheck size={14}/> Данные защищены ролями и политиками RLS</div>
     </main>
-    <div className="login-route"><Factory/><span>中国</span><i/><Ship/><i/><Warehouse/><span>СКЛАД</span></div>
   </div>
 }
 
@@ -226,7 +262,7 @@ function Sidebar({ page, setPage, profile, open, setOpen }) {
 }
 
 function Header({ title, subtitle, onAdd, canEdit, setOpen, code = 'PROC' }) {
-  return <header><button className="menu" onClick={() => setOpen(true)}><Menu/></button><div><div className="page-code">~/{code.toLowerCase()}</div><h1>{title}</h1><p>{subtitle}</p></div>{onAdd && canEdit && <button className="primary" onClick={onAdd}><Plus size={17}/> НОВЫЙ ЗАПРОС →</button>}</header>
+  return <header className="workspace-header"><button className="menu" aria-label="Открыть меню" onClick={() => setOpen(true)}><Menu/></button><div className="workspace-heading"><div className="page-code">Violet Ledger · {code.toLowerCase()}</div><h1>{title}</h1><p>{subtitle}</p></div>{onAdd && canEdit && <button className="primary header-action" onClick={onAdd}><Plus size={17}/> Новый запрос <ArrowRight size={15}/></button>}</header>
 }
 
 function Stat({ icon: Icon, label, value, note, index }) {
@@ -241,6 +277,18 @@ function StatusPill({ status }) {
 function ShipmentPill({ status }) {
   const [label, tone] = shipmentMeta[status] || shipmentMeta.not_shipped
   return <span className={`shipment-pill ${tone}`}><i/>{label}</span>
+}
+
+function RequestJourney({ row, compact = false }) {
+  const stages = requestStages(row)
+  const lastDone = Math.max(0, stages.reduce((latest, stage, index) => stage.done ? index : latest, 0))
+  return <div className={`request-journey ${compact ? 'compact' : ''}`} style={{ '--journey-complete': `${lastDone / (stages.length - 1) * 100}%` }}>
+    <div className="request-journey-line"><i/></div>
+    {stages.map((stage, index) => <div className={`request-journey-step ${stage.done ? 'done' : ''} ${index === lastDone ? 'current' : ''}`} key={stage.key}>
+      <span>{stage.done ? <Check size={12}/> : index + 1}</span>
+      {!compact && <><b>{stage.label}</b><small>{stage.date ? formatDate(stage.date) : stage.done && stage.key === 'calculation' ? 'Внесено' : '—'}</small></>}
+    </div>)}
+  </div>
 }
 
 function ProcurementRoute({ rows }) {
@@ -272,6 +320,7 @@ function MiniCategories({ rows }) {
 }
 
 function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
   return <section className="animated-hero cinematic-hero" data-scene="hero">
     <div className="cinematic-panel">
       <svg className="cinematic-ribbons" viewBox="0 0 1200 680" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -285,12 +334,58 @@ function AnimatedHero({ rows, onAdd, onOpenLogistics, canEdit }) {
         </g>
       </svg>
       <div className="cinematic-shade"/>
+      <div className="cinematic-meta"><span><Package size={13}/> VIOLET LEDGER / ROUTE 01</span><span><i/> SYSTEM ONLINE</span></div>
       <div className="cinematic-copy">
         <small>Система закупок, которая ведёт товар</small>
         <h1>Весь путь товара:<br/>запрос, PI, логистика<br/>и склад</h1>
         {canEdit ? <button className="cinematic-cta" onClick={onAdd}><Package size={15}/> Создать запрос</button> : <button className="cinematic-cta" onClick={onOpenLogistics}><Route size={15}/> Смотреть маршрут</button>}
       </div>
       <div className="cinematic-status"><i/><span>CHINA PROCUREMENT / LIVE</span><b>{rows.length}</b></div>
+      <div className="cinematic-route-dock" aria-label="Этапы закупки"><span>RFQ</span><i/><span>PI</span><i/><span>В пути {inTransit}</span><i/><span>Склад</span></div>
+      <div className="cinematic-scroll-cue"><span>Прокрутите</span><i/></div>
+    </div>
+  </section>
+}
+
+function ProcurementJourneyStory({ rows, onOpenLogistics }) {
+  const featured = rows[0] || {
+    request_number: 'REQ-2026-001', product_name: 'Новый товар', category: 'Категория',
+    agent_name: 'Китайский агент', request_sent_at: '', shipment_status: 'not_shipped'
+  }
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
+  const signed = rows.filter(row => row.pi_signed).length
+  const journeySteps = [
+    [ClipboardList, 'Запрос', 'Фиксируем товар, категорию и агента'],
+    [FileCheck2, 'PI', 'Предложение, расчёт и согласование'],
+    [Ship, 'В пути', `${inTransit} активных перевозок`],
+    [Warehouse, 'Склад', `${rows.filter(row => row.shipment_status === 'arrived').length} товаров принято`]
+  ]
+
+  return <section className="story-section story-journey" data-scene="journey" data-active="0">
+    <div className="journey-sticky">
+      <div className="journey-copy" data-reveal="intro">
+        <div className="story-label story-label-light"><Route size={15}/> Живой маршрут</div>
+        <h2>Одна карточка.<br/>Весь путь закупки.</h2>
+        <p>Статусы меняются, а контекст остаётся перед глазами — от первого запроса до приёмки на складе.</p>
+        <div className="journey-step-list">
+          {journeySteps.map(([Icon, title, note], index) => <button type="button" data-journey-step={index} className={index === 0 ? 'is-active' : ''} key={title}>
+            <span><Icon/></span><b>0{index + 1} · {title}</b><small>{note}</small>
+          </button>)}
+        </div>
+        <button className="journey-link" onClick={onOpenLogistics}>Открыть логистику <ArrowRight size={15}/></button>
+      </div>
+      <div className="journey-visual" data-reveal="card" style={{ '--reveal-delay': '120ms' }}>
+        <div className="journey-card-layer journey-layer-three"/>
+        <div className="journey-card-layer journey-layer-two"/>
+        <article className="journey-request-card">
+          <div className="journey-card-head"><div><small>ТЕКУЩАЯ ЗАКУПКА</small><b>{featured.request_number}</b></div><StatusPill status={calcStatus(featured)}/></div>
+          <div className="journey-card-product"><div className="journey-product-mark"><Package/></div><div><small>{featured.category}</small><h3>{featured.product_name}</h3><p><Factory size={13}/>{featured.agent_name}</p></div></div>
+          <RequestJourney row={featured}/>
+          <div className="journey-card-stats"><span><small>Запрос отправлен</small><b>{formatDate(featured.request_sent_at)}</b></span><span><small>PI подписано</small><b>{signed}</b></span><span><small>В пути</small><b>{inTransit}</b></span></div>
+          <div className="journey-motion-orbit" aria-hidden="true"><i/><i/><span><Route/></span></div>
+        </article>
+        {journeySteps.map(([Icon, title], index) => <div className={`journey-floating-node node-${index + 1} ${index === 0 ? 'is-active' : ''}`} data-journey-art={index} key={title}><Icon/><span>{title}</span></div>)}
+      </div>
     </div>
   </section>
 }
@@ -352,6 +447,17 @@ function usePhantomMotion() {
         const sceneRect = scene.getBoundingClientRect()
         const sceneProgress = Math.min(1, Math.max(0, (window.innerHeight - sceneRect.top) / (window.innerHeight + sceneRect.height)))
         scene.style.setProperty('--scene-progress', sceneProgress.toFixed(3))
+        scene.style.setProperty('--scene-lift', `${Math.round((.5 - sceneProgress) * 32)}px`)
+
+        if (scene.classList.contains('story-journey')) {
+          const journeyDistance = Math.max(sceneRect.height - window.innerHeight * .72, 1)
+          const journeyProgress = Math.min(1, Math.max(0, -sceneRect.top / journeyDistance))
+          const activeStage = Math.min(3, Math.floor(journeyProgress * 4))
+          scene.dataset.active = String(activeStage)
+          scene.style.setProperty('--journey-progress', journeyProgress.toFixed(3))
+          scene.querySelectorAll('[data-journey-step]').forEach((item, index) => item.classList.toggle('is-active', index === activeStage))
+          scene.querySelectorAll('[data-journey-art]').forEach((item, index) => item.classList.toggle('is-active', index === activeStage))
+        }
       })
     }
     const requestParallax = () => {
@@ -366,15 +472,27 @@ function usePhantomMotion() {
     let ribbonFrame = 0
     let ribbonsActive = true
     let motionEpoch = performance.now()
+    let pointerX = 0
+    let pointerY = 0
     const motionScale = reducedMotion ? 0.24 : 1
     const motionSpeed = reducedMotion ? 0.35 : 1
+
+    const updatePointer = event => {
+      if (!hero || event.pointerType === 'touch') return
+      const rect = hero.getBoundingClientRect()
+      pointerX = ((event.clientX - rect.left) / Math.max(rect.width, 1) - .5) * 2
+      pointerY = ((event.clientY - rect.top) / Math.max(rect.height, 1) - .5) * 2
+    }
+    const resetPointer = () => { pointerX = 0; pointerY = 0 }
+    hero?.addEventListener('pointermove', updatePointer, { passive: true })
+    hero?.addEventListener('pointerleave', resetPointer)
 
     const animateRibbons = now => {
       ribbonFrame = 0
       if (!ribbonsActive || document.hidden || !ribbonField || !ribbons.length) return
       const time = ((now - motionEpoch) / 1000) * motionSpeed
-      const fieldX = Math.sin(time * .52) * 22 * motionScale
-      const fieldY = Math.cos(time * .41) * 14 * motionScale
+      const fieldX = (Math.sin(time * .52) * 22 + pointerX * 11) * motionScale
+      const fieldY = (Math.cos(time * .41) * 14 + pointerY * 8) * motionScale
       const fieldScale = 1 + Math.sin(time * .31) * .035 * motionScale
       const fieldAngle = Math.sin(time * .27) * 1.6 * motionScale
       ribbonField.setAttribute('transform', `translate(${fieldX.toFixed(2)} ${fieldY.toFixed(2)}) scale(${fieldScale.toFixed(4)}) rotate(${fieldAngle.toFixed(2)} 600 340)`)
@@ -422,6 +540,8 @@ function usePhantomMotion() {
       window.removeEventListener('resize', requestParallax)
       document.removeEventListener('visibilitychange', resumeRibbonMotion)
       window.removeEventListener('pageshow', resumeRibbonMotion)
+      hero?.removeEventListener('pointermove', updatePointer)
+      hero?.removeEventListener('pointerleave', resetPointer)
       stopRibbonMotion()
       if (frame) cancelAnimationFrame(frame)
     }
@@ -445,6 +565,8 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
       <h2 data-reveal="statement">Управление закупками<br/>для <span className="manifesto-mark"><Route/></span> всей команды</h2>
       <button className="manifesto-cta" data-reveal="statement" style={{ '--reveal-delay': '130ms' }} onClick={onOpenLogistics}>Смотреть этапы <ArrowRight size={15}/></button>
     </section>
+
+    <ProcurementJourneyStory rows={rows} onOpenLogistics={onOpenLogistics}/>
 
     <section className="story-section story-products" data-scene="products">
       <div className="section-intro" data-reveal="intro">
@@ -500,27 +622,83 @@ function Dashboard({ rows, onAdd, onOpenLogistics, canEdit }) {
   </div>
 }
 
-function RequestTable({ rows, onEdit, onDelete, canEdit, compact = false }) {
+function RequestDetail({ row, onClose, onEdit, canEdit }) {
+  useEffect(() => {
+    const closeOnEscape = event => { if (event.key === 'Escape') onClose() }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [onClose])
+
+  return <div className="request-detail-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <div className="request-detail-drawer" role="dialog" aria-modal="true" aria-label={`Запрос ${row.request_number}`}>
+      <div className="request-detail-topbar"><span>КАРТОЧКА ЗАКУПКИ</span><button aria-label="Закрыть карточку" onClick={onClose}><X/></button></div>
+      <div className="request-detail-hero">
+        <div className="request-detail-mark"><Package/></div>
+        <div><small>{row.request_number}</small><h2>{row.product_name}</h2><p>{row.category}</p></div>
+        <StatusPill status={calcStatus(row)}/>
+      </div>
+      <section className="request-detail-section">
+        <div className="request-detail-title"><span>Цикл запроса и PI</span><small>Обновляется из общей базы</small></div>
+        <RequestJourney row={row}/>
+      </section>
+      <section className="request-detail-grid">
+        <div><Factory/><small>Китайский агент</small><b>{row.agent_name || '—'}</b></div>
+        <div><Clock3/><small>Запрос отправлен</small><b>{formatDate(row.request_sent_at)}</b></div>
+        <div><Truck/><small>Логистика</small><b>{row.logistics_company || 'Не назначена'}</b></div>
+        <div><Warehouse/><small>Состояние поставки</small><b>{shipmentMeta[row.shipment_status]?.[0] || shipmentMeta.not_shipped[0]}</b></div>
+      </section>
+      <section className="request-detail-section request-detail-route">
+        <div className="request-detail-title"><span>Маршрут поставки</span><ShipmentPill status={row.shipment_status}/></div>
+        <div className="detail-route-track"><span className="done"><Factory/><b>Фабрика</b></span><i/><span className={row.shipment_status !== 'not_shipped' ? 'done' : ''}><Ship/><b>В пути</b></span><i/><span className={row.shipment_status === 'arrived' ? 'done' : ''}><Warehouse/><b>Склад</b></span></div>
+      </section>
+      {row.notes && <section className="request-detail-note"><small>КОММЕНТАРИЙ</small><p>{row.notes}</p></section>}
+      <div className="request-detail-actions"><button className="secondary" onClick={onClose}>Закрыть</button>{canEdit && <button className="primary" onClick={() => { onClose(); onEdit(row) }}><Pencil size={15}/> Редактировать запрос</button>}</div>
+    </div>
+  </div>
+}
+
+function RequestTable({ rows, onEdit, onDelete, onInspect, canEdit, compact = false }) {
   if (!rows.length) return <div className="empty"><PackageOpen size={34}/><b>Запросов пока нет</b><span>Администратор может добавить первую товарную позицию.</span></div>
-  return <div className="table-wrap"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id}>
-    <td><b className="request-no">{row.request_number}</b></td>
-    <td><b>{row.product_name}</b><small>{row.category}</small></td>
-    <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
-    <td>{formatDate(row.request_sent_at)}</td>
-    <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
-    <td><StatusPill status={calcStatus(row)}/></td>
-    {!compact && <td><div className="row-actions">{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> read_only</span>}</div></td>}
-  </tr>)}</tbody></table></div>
+  return <>
+    <div className="table-wrap request-table-view"><table><thead><tr><th>ID запроса</th><th>Товар / категория</th><th>Китайский агент</th><th>Отправлен</th><th>Логистика</th><th>Текущий этап</th>{!compact && <th>Действия</th>}</tr></thead><tbody>{rows.map(row => <tr key={row.id} onDoubleClick={() => onInspect?.(row)}>
+      <td><button className="request-number-link" onClick={() => onInspect?.(row)}>{row.request_number}<ChevronRight size={13}/></button></td>
+      <td><b>{row.product_name}</b><small>{row.category}</small></td>
+      <td><span className="supplier-cell"><Factory size={14}/>{row.agent_name}</span></td>
+      <td>{formatDate(row.request_sent_at)}</td>
+      <td><ShipmentPill status={row.shipment_status}/>{row.logistics_company && <small>{row.logistics_company}</small>}</td>
+      <td><StatusPill status={calcStatus(row)}/></td>
+      {!compact && <td><div className="row-actions"><button title="Открыть карточку" onClick={() => onInspect?.(row)}><ChevronRight size={16}/></button>{canEdit ? <><button title="Редактировать" onClick={() => onEdit(row)}><Pencil size={15}/></button><button title="Удалить" className="danger" onClick={() => onDelete(row)}><Trash2 size={15}/></button></> : <span className="locked-action"><ShieldCheck size={14}/> Просмотр</span>}</div></td>}
+    </tr>)}</tbody></table></div>
+    <div className="request-card-list">{rows.map(row => <article className="mobile-request-card" key={row.id}>
+      <div className="mobile-request-head"><button onClick={() => onInspect?.(row)}>{row.request_number}<ChevronRight size={14}/></button><StatusPill status={calcStatus(row)}/></div>
+      <h3>{row.product_name}</h3><p>{row.category}</p>
+      <RequestJourney row={row} compact/>
+      <div className="mobile-request-meta"><span><Factory size={14}/><small>Агент</small><b>{row.agent_name || '—'}</b></span><span><Clock3 size={14}/><small>Отправлен</small><b>{formatDate(row.request_sent_at)}</b></span></div>
+      <div className="mobile-request-footer"><ShipmentPill status={row.shipment_status}/><button className="inline-edit" onClick={() => onInspect?.(row)}>Открыть карточку <ArrowRight size={14}/></button></div>
+    </article>)}</div>
+  </>
 }
 
 function Requests({ rows, onAdd, onEdit, onDelete, canEdit, setOpen }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
+  const [selected, setSelected] = useState(null)
   const filtered = rows.filter(row => (status === 'all' || calcStatus(row) === status) && [row.request_number, row.product_name, row.category, row.agent_name].join(' ').toLowerCase().includes(query.toLowerCase()))
+  const revision = rows.filter(row => row.pi_revision && !row.pi_signed).length
+  const signed = rows.filter(row => row.pi_signed).length
+  const inTransit = rows.filter(row => row.shipment_status === 'in_transit').length
+
   return <>
-    <Header title="Реестр товарных запросов" subtitle={`${rows.length} позиций в защищённой общей базе`} onAdd={onAdd} canEdit={canEdit} setOpen={setOpen} code="requests"/>
-    {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>READ_ONLY</span> Добавление, редактирование и удаление доступны только администратору.</div>}
-    <section className="panel registry"><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Поиск по номеру, товару, категории или агенту" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} canEdit={canEdit}/></section>
+    <Header title="Реестр запросов" subtitle={`${rows.length} товарных позиций · единый цикл от запроса до склада`} onAdd={onAdd} canEdit={canEdit} setOpen={setOpen} code="requests"/>
+    {!canEdit && <div className="read-only-banner"><ShieldCheck size={16}/><span>Режим просмотра</span> Добавление, редактирование и удаление доступны только администратору.</div>}
+    <section className="registry-overview">
+      <article><span><ClipboardList/>Всего запросов</span><strong>{rows.length}</strong><small>В общей базе</small></article>
+      <article><span><FilePenLine/>На доработке</span><strong>{revision}</strong><small>Требуют внимания</small></article>
+      <article><span><FileCheck2/>PI подписано</span><strong>{signed}</strong><small>Готовы к следующему шагу</small></article>
+      <article><span><Ship/>Сейчас в пути</span><strong>{inTransit}</strong><small>Активные перевозки</small></article>
+    </section>
+    <section className="panel registry"><div className="registry-toolbar-head"><div><small>ТОВАРНЫЕ ПОЗИЦИИ</small><h2>Рабочий реестр</h2></div><span>{filtered.length} из {rows.length}</span></div><div className="toolbar"><div className="search"><Search size={17}/><input placeholder="Номер, товар, категория или агент" value={query} onChange={event => setQuery(event.target.value)}/></div><div className="filter"><Filter size={16}/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все этапы</option>{Object.entries(statusMeta).map(([key, [label]]) => <option key={key} value={key}>{label}</option>)}</select></div></div><RequestTable rows={filtered} onEdit={onEdit} onDelete={onDelete} onInspect={setSelected} canEdit={canEdit}/></section>
+    {selected && <RequestDetail row={selected} onClose={() => setSelected(null)} onEdit={onEdit} canEdit={canEdit}/>}
   </>
 }
 
@@ -630,7 +808,8 @@ function RequestModal({ value, onClose, onSave }) {
     }
   }
 
-  return <div className="modal-backdrop"><div className="modal"><div className="modal-head"><div><div className="terminal-line">~/requests/edit <span>_</span></div><div className="eyebrow">КАРТОЧКА ЗАПРОСА</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2></div><button onClick={onClose}><X/></button></div><form onSubmit={submit}>
+  return <div className="modal-backdrop"><div className="modal request-editor"><div className="modal-head"><div><div className="eyebrow"><Package size={14}/> КАРТОЧКА ЗАКУПКИ</div><h2>{value?.id ? 'Редактировать запрос' : 'Новый запрос'}</h2><p>{value?.id ? `${form.request_number} · ${form.product_name}` : 'Добавьте основную информацию и отметьте текущий этап.'}</p></div><button aria-label="Закрыть" onClick={onClose}><X/></button></div><form onSubmit={submit}>
+    <div className="request-editor-journey"><div><small>ТЕКУЩИЙ ПРОГРЕСС</small><b>{statusMeta[calcStatus(form)]?.[0]}</b></div><RequestJourney row={form} compact/></div>
     <div className="form-grid"><label>Номер запроса *<input required value={form.request_number} onChange={event => set('request_number', event.target.value)} placeholder="REQ-2026-001"/></label><label>Дата отправки *<input type="date" required value={form.request_sent_at || ''} onChange={event => set('request_sent_at', event.target.value)}/></label><label>Категория товара *<input required value={form.category} onChange={event => set('category', event.target.value)} placeholder="Например, Освещение"/></label><label>Китайский агент *<input required value={form.agent_name} onChange={event => set('agent_name', event.target.value)} placeholder="Имя или компания"/></label><label className="full">Название товара *<input required value={form.product_name} onChange={event => set('product_name', event.target.value)} placeholder="Введите название товара"/></label></div>
     <div className="stage-title"><span>ЭТАПЫ ОБРАБОТКИ</span><small>REQUEST → OFFER → CALC → PI → SIGN</small></div><div className="stage-list">{checks.map(([key, label, dateKey], index) => <div className={`stage-row ${form[key] ? 'done' : ''}`} key={key}><button type="button" className="check" onClick={() => set(key, !form[key])}>{form[key] && <Check size={15}/>}</button><span className="stage-number">0{index + 1}</span><b>{label}</b>{dateKey && form[key] && <input type="date" value={form[dateKey] || ''} onChange={event => set(dateKey, event.target.value)}/>}</div>)}</div>
     <div className="stage-title"><span>ЛОГИСТИКА</span><small>CHINA → TRANSIT → WAREHOUSE</small></div>
