@@ -1,10 +1,16 @@
-// Violet Ledger — premium category distribution presentation.
-// Enhances the existing React markup without changing data or Supabase logic.
+// Violet Ledger — clean interactive category analytics.
+// Rebuilds the existing category distribution into a light clickable matrix
+// and opens an agent drawer without changing Supabase or procurement data.
 
 const CATEGORY_LIST_SELECTOR = '.category-bars'
-const VISIBLE_LIMIT = 6
+const VISIBLE_LIMIT = 8
 let scanScheduled = false
 
+const normalize = value => String(value || '').trim().toLocaleLowerCase('ru-RU')
+const parseNumber = value => {
+  const parsed = Number.parseFloat(String(value || '').replace(',', '.').replace(/[^0-9.-]/g, ''))
+  return Number.isFinite(parsed) ? parsed : 0
+}
 const plural = (value, one, few, many) => {
   const number = Math.abs(Number(value) || 0) % 100
   const tail = number % 10
@@ -13,103 +19,222 @@ const plural = (value, one, few, many) => {
   if (tail >= 2 && tail <= 4) return few
   return many
 }
-
-const parseNumber = value => {
-  const parsed = Number.parseFloat(String(value || '').replace(',', '.').replace(/[^0-9.-]/g, ''))
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
 const make = (tag, className, text) => {
   const node = document.createElement(tag)
   if (className) node.className = className
   if (text !== undefined) node.textContent = text
   return node
 }
+const getRows = list => [...list.querySelectorAll(':scope > .category-bar')]
 
-function getCategoryRows(list) {
-  return [...list.querySelectorAll(':scope > .category-bar')]
+function supplierDirectory(content) {
+  return [...content.querySelectorAll('.analytics-supplier-panel tbody tr')].map(row => {
+    const cells = [...row.querySelectorAll('td')]
+    return {
+      name: cells[0]?.querySelector('b')?.textContent?.trim() || cells[0]?.textContent?.trim() || 'Без названия',
+      total: parseNumber(cells[1]?.textContent),
+      categories: (cells[3]?.textContent || '').split(',').map(item => item.trim()).filter(Boolean),
+      signed: parseNumber(cells[4]?.textContent),
+      revision: parseNumber(cells[5]?.textContent),
+    }
+  })
 }
 
-function normalizeRow(row, index, maxTotal) {
+function agentsForCategory(content, categoryName) {
+  const target = normalize(categoryName)
+  return supplierDirectory(content).filter(agent =>
+    agent.categories.some(category => normalize(category) === target)
+  )
+}
+
+function ensureDrawer(content) {
+  let drawer = content.querySelector(':scope > .analytics-category-drawer')
+  if (drawer) return drawer
+
+  const backdrop = make('div', 'analytics-category-backdrop')
+  backdrop.dataset.categoryDrawer = 'true'
+  backdrop.hidden = true
+
+  drawer = make('aside', 'analytics-category-drawer')
+  drawer.hidden = true
+  drawer.tabIndex = -1
+  drawer.setAttribute('role', 'dialog')
+  drawer.setAttribute('aria-modal', 'true')
+  drawer.setAttribute('aria-label', 'Агенты по выбранной категории')
+
+  const top = make('div', 'analytics-category-drawer-top')
+  const kicker = make('small', '', 'НАПРАВЛЕННЫЕ ПРЕДЛОЖЕНИЯ')
+  const close = make('button', 'analytics-category-drawer-close', '×')
+  close.type = 'button'
+  close.setAttribute('aria-label', 'Закрыть список агентов')
+  top.append(kicker, close)
+
+  drawer.append(
+    top,
+    make('h3', 'analytics-category-drawer-title'),
+    make('p', 'analytics-category-drawer-summary'),
+    make('div', 'analytics-category-agent-list'),
+  )
+  content.append(backdrop, drawer)
+
+  const closeDrawer = () => {
+    drawer.classList.remove('is-open')
+    backdrop.classList.remove('is-open')
+    document.documentElement.classList.remove('analytics-drawer-open')
+    window.setTimeout(() => {
+      drawer.hidden = true
+      backdrop.hidden = true
+    }, 220)
+  }
+
+  close.addEventListener('click', closeDrawer)
+  backdrop.addEventListener('click', closeDrawer)
+  drawer.addEventListener('keydown', event => {
+    if (event.key === 'Escape') closeDrawer()
+  })
+  drawer.closeDrawer = closeDrawer
+  return drawer
+}
+
+function openDrawer(content, categoryName, total, agentCount) {
+  const drawer = ensureDrawer(content)
+  const backdrop = content.querySelector(':scope > .analytics-category-backdrop')
+  const agents = agentsForCategory(content, categoryName)
+
+  drawer.querySelector('.analytics-category-drawer-title').textContent = categoryName
+  drawer.querySelector('.analytics-category-drawer-summary').textContent =
+    `${total} ${plural(total, 'товарная позиция', 'товарные позиции', 'товарных позиций')} · ${agentCount} ${plural(agentCount, 'агент', 'агента', 'агентов')}`
+
+  const list = drawer.querySelector('.analytics-category-agent-list')
+  list.replaceChildren()
+
+  if (!agents.length) {
+    const empty = make('div', 'analytics-category-agent-empty')
+    empty.append(
+      make('strong', '', 'Агенты не найдены'),
+      make('span', '', 'В текущей товарной матрице нет связанного агента для этой категории.'),
+    )
+    list.append(empty)
+  } else {
+    agents.forEach((agent, index) => {
+      const card = make('article', 'analytics-category-agent-card')
+      const avatar = make('div', 'analytics-category-agent-avatar', agent.name.slice(0, 2).toUpperCase())
+      const copy = make('div', 'analytics-category-agent-copy')
+      copy.append(
+        make('small', '', `АГЕНТ ${String(index + 1).padStart(2, '0')}`),
+        make('strong', '', agent.name),
+      )
+      const metrics = make('div', 'analytics-category-agent-metrics')
+      metrics.append(
+        make('span', '', `${agent.total} товаров в матрице`),
+        make('span', '', `${agent.signed} PI подписано`),
+        make('span', agent.revision ? 'has-revision' : '', `${agent.revision} на доработке`),
+      )
+      card.append(avatar, copy, metrics)
+      list.append(card)
+    })
+  }
+
+  drawer.hidden = false
+  backdrop.hidden = false
+  requestAnimationFrame(() => {
+    drawer.classList.add('is-open')
+    backdrop.classList.add('is-open')
+    drawer.focus({ preventScroll: true })
+  })
+  document.documentElement.classList.add('analytics-drawer-open')
+}
+
+function normalizeRow(row, index, maxTotal, content) {
   row.classList.add('analytics-category-item')
   row.style.setProperty('--category-order', String(index))
 
   const meta = row.querySelector(':scope > div:first-child')
   const track = row.querySelector(':scope > .bar-track')
   const totalNode = row.querySelector(':scope > strong')
+  const rank = meta?.querySelector(':scope > span')
+  const title = meta?.querySelector(':scope > b')
+  const agents = meta?.querySelector(':scope > small')
 
-  if (meta) {
-    meta.classList.add('analytics-category-meta')
-    const rank = meta.querySelector(':scope > span')
-    const title = meta.querySelector(':scope > b')
-    const agents = meta.querySelector(':scope > small')
+  meta?.classList.add('analytics-category-meta')
+  rank?.classList.add('analytics-category-rank')
+  title?.classList.add('analytics-category-name')
+  agents?.classList.add('analytics-category-agents')
+  track?.classList.add('analytics-category-progress')
+  totalNode?.classList.add('analytics-category-total')
 
-    rank?.classList.add('analytics-category-rank')
-
-    let copy = meta.querySelector(':scope > .analytics-category-copy')
-    if (!copy && title) {
-      copy = make('div', 'analytics-category-copy')
-      title.before(copy)
-      copy.append(title)
-      if (agents) copy.append(agents)
-    }
-
-    if (title) title.classList.add('analytics-category-name')
-    if (agents) agents.classList.add('analytics-category-agents')
+  let copy = meta?.querySelector(':scope > .analytics-category-copy')
+  if (meta && !copy && title) {
+    copy = make('div', 'analytics-category-copy')
+    title.before(copy)
+    copy.append(title)
+    if (agents) copy.append(agents)
   }
 
-  track?.classList.add('analytics-category-progress')
+  let action = row.querySelector(':scope > .analytics-category-open')
+  if (!action) {
+    action = make('button', 'analytics-category-open')
+    action.type = 'button'
+    action.append(make('span', '', 'Смотреть агентов'), make('i', '', '→'))
+    row.append(action)
+  }
 
   const total = parseNumber(totalNode?.textContent)
-  row.style.setProperty('--category-share', `${maxTotal ? Math.max(7, total / maxTotal * 100) : 0}%`)
+  const categoryName = title?.textContent?.trim() || 'Без категории'
+  row.style.setProperty('--category-share', `${maxTotal ? Math.max(8, total / maxTotal * 100) : 0}%`)
+  row.classList.toggle('is-category-leader', index === 0 && total > 0)
+  row.dataset.categoryName = categoryName
 
-  if (totalNode) {
-    totalNode.classList.add('analytics-category-total')
-    totalNode.dataset.caption = plural(total, 'позиция', 'позиции', 'позиций')
+  if (!row.dataset.categoryClickBound) {
+    row.dataset.categoryClickBound = 'true'
+    const open = () => openDrawer(
+      content,
+      row.dataset.categoryName,
+      parseNumber(row.querySelector('.analytics-category-total')?.textContent),
+      parseNumber(row.querySelector('.analytics-category-agents')?.textContent),
+    )
+    row.addEventListener('click', open)
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        open()
+      }
+    })
   }
 
-  row.classList.toggle('is-category-leader', index === 0 && total > 0)
+  row.tabIndex = 0
+  row.setAttribute('role', 'button')
+  row.setAttribute('aria-label', `${categoryName}: показать агентов`)
 }
 
-function buildOverview(panel, rows) {
+function buildHeader(panel, rows) {
   const head = panel.querySelector(':scope > .panel-head') || panel.querySelector('.panel-head')
   if (!head) return
+  head.classList.add('analytics-category-clean-head')
 
-  let overview = panel.querySelector(':scope > .analytics-category-overview')
-  if (!overview) {
-    overview = make('section', 'analytics-category-overview')
-    overview.setAttribute('aria-label', 'Сводка по товарным категориям')
-    head.insertAdjacentElement('afterend', overview)
+  let summary = panel.querySelector(':scope > .analytics-category-summaryline')
+  if (!summary) {
+    summary = make('div', 'analytics-category-summaryline')
+    head.insertAdjacentElement('afterend', summary)
   }
 
-  const first = rows[0]
-  const leaderName = first?.querySelector('.analytics-category-name')?.textContent?.trim() || 'Нет данных'
-  const leaderTotal = parseNumber(first?.querySelector('.analytics-category-total')?.textContent)
-  const totalProducts = rows.reduce((sum, row) => sum + parseNumber(row.querySelector('.analytics-category-total')?.textContent), 0)
-
-  overview.replaceChildren()
-
-  const items = [
-    ['Категорий', String(rows.length), 'в активной матрице'],
-    ['Лидер', leaderName, leaderTotal ? `${leaderTotal} ${plural(leaderTotal, 'позиция', 'позиции', 'позиций')}` : 'нет данных'],
-    ['Всего товаров', String(totalProducts), 'распределено по категориям'],
-  ]
-
-  items.forEach(([label, value, note], index) => {
-    const item = make('article', `analytics-category-summary analytics-category-summary-${index + 1}`)
-    item.append(
-      make('small', '', label),
-      make('strong', '', value),
-      make('span', '', note),
-    )
-    overview.append(item)
-  })
+  const totalProducts = rows.reduce((sum, row) => sum + parseNumber(row.querySelector(':scope > strong')?.textContent), 0)
+  const leaderName = rows[0]?.querySelector('b')?.textContent?.trim() || 'Нет данных'
+  const signature = `${rows.length}|${leaderName}|${totalProducts}`
+  if (summary.dataset.signature === signature) return
+  summary.dataset.signature = signature
+  summary.replaceChildren(
+    make('span', '', `${rows.length} ${plural(rows.length, 'категория', 'категории', 'категорий')}`),
+    make('span', '', `Лидер · ${leaderName}`),
+    make('span', '', `${totalProducts} ${plural(totalProducts, 'товар', 'товара', 'товаров')}`),
+  )
 }
 
 function applyVisibility(panel, list, rows) {
   const expanded = panel.dataset.categoryExpanded === 'true'
   rows.forEach((row, index) => {
-    row.hidden = !expanded && index >= VISIBLE_LIMIT
+    const nextHidden = !expanded && index >= VISIBLE_LIMIT
+    if (row.hidden !== nextHidden) row.hidden = nextHidden
   })
 
   let footer = panel.querySelector(':scope > .analytics-category-footer')
@@ -117,74 +242,62 @@ function applyVisibility(panel, list, rows) {
     footer?.remove()
     return
   }
-
   if (!footer) {
     footer = make('div', 'analytics-category-footer')
     const button = make('button', 'analytics-category-toggle')
     button.type = 'button'
     button.addEventListener('click', () => {
       panel.dataset.categoryExpanded = panel.dataset.categoryExpanded === 'true' ? 'false' : 'true'
-      applyVisibility(panel, list, getCategoryRows(list))
+      applyVisibility(panel, list, getRows(list))
     })
     footer.append(button)
     list.insertAdjacentElement('afterend', footer)
   }
-
   const button = footer.querySelector('.analytics-category-toggle')
-  if (button) {
-    const nextLabel = expanded ? 'Свернуть категории' : `Показать все категории · ${rows.length}`
-    const nextExpanded = String(expanded)
-    if (button.textContent !== nextLabel) button.textContent = nextLabel
-    if (button.getAttribute('aria-expanded') !== nextExpanded) button.setAttribute('aria-expanded', nextExpanded)
-  }
+  const label = expanded ? 'Свернуть категории' : `Показать все · ${rows.length}`
+  if (button.textContent !== label) button.textContent = label
+  if (button.getAttribute('aria-expanded') !== String(expanded)) button.setAttribute('aria-expanded', String(expanded))
 }
 
 function enhanceCategoryPanel(list) {
   const panel = list.closest('.panel')
-  if (!panel) return
+  const content = panel?.closest('.content')
+  if (!panel || !content) return
 
-  panel.classList.add('analytics-category-premium')
-  panel.closest('.content')?.classList.add('analytics-category-premium-active')
-
-  const rows = getCategoryRows(list)
+  panel.classList.add('analytics-category-clean')
+  content.classList.add('analytics-category-clean-active')
+  const rows = getRows(list)
   const maxTotal = Math.max(1, ...rows.map(row => parseNumber(row.querySelector(':scope > strong')?.textContent)))
-  const signature = rows.map(row => [
-    row.querySelector('b')?.textContent?.trim(),
-    row.querySelector('small')?.textContent?.trim(),
-    row.querySelector(':scope > strong')?.textContent?.trim(),
-  ].join(':')).join('|')
-
-  rows.forEach((row, index) => normalizeRow(row, index, maxTotal))
-
-  if (panel.dataset.categoryPremiumSignature !== signature) {
-    panel.dataset.categoryPremiumSignature = signature
-    buildOverview(panel, rows)
-  }
-
+  rows.forEach((row, index) => normalizeRow(row, index, maxTotal, content))
+  buildHeader(panel, rows)
   applyVisibility(panel, list, rows)
+  ensureDrawer(content)
 }
 
-function cleanupCategoryMode() {
-  document.querySelectorAll('.content.analytics-category-premium-active').forEach(content => {
-    if (!content.querySelector(CATEGORY_LIST_SELECTOR)) content.classList.remove('analytics-category-premium-active')
+function cleanup() {
+  document.querySelectorAll('.content.analytics-category-clean-active').forEach(content => {
+    if (!content.querySelector(CATEGORY_LIST_SELECTOR)) {
+      content.querySelector('.analytics-category-drawer')?.closeDrawer?.()
+      content.querySelectorAll('[data-category-drawer], .analytics-category-drawer').forEach(node => node.remove())
+      content.classList.remove('analytics-category-clean-active')
+    }
   })
 }
 
-function scanCategoryPanel() {
+function scan() {
   scanScheduled = false
   const list = document.querySelector(CATEGORY_LIST_SELECTOR)
   if (list) enhanceCategoryPanel(list)
-  else cleanupCategoryMode()
+  else cleanup()
 }
 
-function scheduleCategoryScan() {
+function scheduleScan() {
   if (scanScheduled) return
   scanScheduled = true
-  requestAnimationFrame(scanCategoryPanel)
+  requestAnimationFrame(scan)
 }
 
-scheduleCategoryScan()
-
-const categoryRoot = document.getElementById('root') || document.body
-const categoryObserver = new MutationObserver(scheduleCategoryScan)
-categoryObserver.observe(categoryRoot, { childList: true, subtree: true, characterData: true })
+scheduleScan()
+const root = document.getElementById('root') || document.body
+const observer = new MutationObserver(scheduleScan)
+observer.observe(root, { childList: true, subtree: true, characterData: true })
