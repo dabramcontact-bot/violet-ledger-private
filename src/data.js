@@ -9,7 +9,7 @@ export const currencies = ['USD', 'EUR', 'CNY', 'BYN', 'RUB']
 export const requestStatuses = {
   request: 'Запрос отправлен',
   offer: 'Предложение получено',
-  calculation: 'Внесено в просчёт'
+  calculation: 'Внесено в расчёт'
 }
 export const piStatuses = {
   requested: 'PI запрошено',
@@ -50,7 +50,7 @@ export const formatMoney = (value, currency = '') => value == null || value === 
 export function friendlyError(error) {
   const message = String(error?.message || error || '')
   if (/row-level security|permission denied|42501/i.test(message)) return 'Недостаточно прав для этого действия.'
-  if (/relation .* does not exist|column .* does not exist|schema cache/i.test(message)) return 'База данных ещё не обновлена. Выполните supabase/violet-ledger-upgrade.sql в Supabase SQL Editor.'
+  if (/relation .* does not exist|column .* does not exist|schema cache/i.test(message)) return 'База данных ещё не обновлена. Выполните последнее SQL-обновление из папки supabase в Supabase SQL Editor.'
   if (/duplicate key|23505/i.test(message)) return 'Запись с таким номером уже существует.'
   if (/failed to fetch|networkerror|load failed/i.test(message)) return 'Нет связи с Supabase. Проверьте интернет и повторите действие.'
   return message || 'Не удалось выполнить действие.'

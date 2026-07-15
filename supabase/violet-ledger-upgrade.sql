@@ -66,11 +66,17 @@ create table if not exists public.pi_records (
   responsible text not null default '',
   comment text not null default '',
   attachments jsonb not null default '[]'::jsonb check (jsonb_typeof(attachments) = 'array'),
+  items jsonb not null default '[]'::jsonb check (jsonb_typeof(items) = 'array'),
   created_by uuid not null references auth.users(id),
   updated_by uuid not null references auth.users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.pi_records add column if not exists items jsonb not null default '[]'::jsonb;
+alter table public.pi_records drop constraint if exists pi_records_items_array_check;
+alter table public.pi_records add constraint pi_records_items_array_check check (jsonb_typeof(items) = 'array');
+create index if not exists pi_records_items_gin_idx on public.pi_records using gin (items);
 
 create index if not exists pi_records_request_id_idx on public.pi_records(request_id);
 create index if not exists pi_records_article_idx on public.pi_records(article);
