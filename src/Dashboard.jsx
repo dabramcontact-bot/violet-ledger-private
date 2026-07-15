@@ -8,6 +8,10 @@ import { formatDate, formatDateTime, loadRows, today } from './data'
 import { ErrorBanner } from './components'
 import './dashboard-workflow-premium.css'
 import './dashboard-premium-original.css'
+import './cinematic-ribbons.css'
+import './hero-depth.css'
+import './hero-ribbons.js'
+import './hero-depth.js'
 
 const processStages = [
   { key: 'requests', number: '01', title: 'Запрос', icon: ClipboardList, color: '#7398f1', text: 'Фиксируем товар, артикул, поставщика и коммерческие условия. Полученное предложение остаётся в понятном трёхэтапном цикле.' },
@@ -87,37 +91,22 @@ export default function Dashboard({ onNavigate, onCreate }) {
   const currentStage = processStages[activeStage]
   const CurrentIcon = currentStage.icon
 
-  return <div className="premium-home dashboard-page">
+  return <div className="premium-home dashboard-page phantom-story">
     <ErrorBanner error={error}/>
 
-    <section className="vl-home-hero">
-      <div className="vl-home-noise"/><div className="vl-home-glow"/>
-      <svg className="vl-flow-lines" viewBox="0 0 1200 720" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-        <defs>
-          <linearGradient id="flow-violet"><stop stopColor="#8470e6"/><stop offset=".5" stopColor="#c58bea"/><stop offset="1" stopColor="#5f82dd"/></linearGradient>
-          <linearGradient id="flow-blue"><stop stopColor="#4879d5"/><stop offset=".55" stopColor="#87b6ff"/><stop offset="1" stopColor="#a477d3"/></linearGradient>
-          <linearGradient id="flow-peach"><stop stopColor="#ef7f9d"/><stop offset=".5" stopColor="#ffc08a"/><stop offset="1" stopColor="#916fd2"/></linearGradient>
-          <filter id="line-glow"><feGaussianBlur stdDeviation="5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
-        </defs>
-        <path className="flow-shadow" d="M-80 590 C170 370 260 710 510 470 S850 70 1290 210"/>
-        <path className="flow-line line-violet" d="M-80 590 C170 370 260 710 510 470 S850 70 1290 210"/>
-        <path className="flow-line line-blue" d="M-110 185 C170 45 330 400 560 285 S880 570 1280 395"/>
-        <path className="flow-line line-peach" d="M-100 430 C145 630 335 95 600 205 S930 660 1300 510"/>
-        <circle className="flow-dot dot-one" r="7"/><circle className="flow-dot dot-two" r="6"/><circle className="flow-dot dot-three" r="5"/>
-      </svg>
-      <div className="vl-hero-copy">
-        <div className="vl-hero-badge"><Route/> ЗАКУПКИ ИЗ КИТАЯ · ЕДИНЫЙ МАРШРУТ</div>
-        <h1>От запроса до склада.<br/><em>Всё под контролем.</em></h1>
+    <section className="vl-home-hero animated-hero brand-hero" data-scene="hero">
+      <div className="hero-ambient ambient-one" aria-hidden="true"/><div className="hero-ambient ambient-two" aria-hidden="true"/>
+      <div className="vl-hero-copy hero-copy">
+        <div className="vl-hero-badge hero-eyebrow"><Route/> CHINA → PI → WAREHOUSE</div>
+        <h1><span className="hero-title-line">От запроса до склада.</span><span className="hero-title-line hero-title-line-two">Всё под контролем.</span></h1>
         <p>Каждый этап сделки понятен команде: предложение поставщика, PI, перевозка и оплата собраны в одной спокойной системе.</p>
-        <div className="vl-hero-actions"><button className="primary" onClick={() => onCreate('requests')}><Plus/> Создать запрос</button><button className="vl-hero-secondary" onClick={() => onNavigate('logistics')}><Route/> Смотреть весь маршрут</button></div>
+        <div className="vl-hero-actions hero-actions"><button className="primary" onClick={() => onCreate('requests')}><Plus/> Создать запрос</button></div>
+        <div className="vl-scroll-cue hero-scroll-cue"><span>Прокрутите, чтобы увидеть маршрут</span><i/></div>
       </div>
-      <div className="vl-hero-live-card">
-        <header><span>LIVE PROCUREMENT</span><b>{loading ? '··' : String(counts.requestsTotal + counts.piTotal).padStart(2,'0')}</b></header>
-        <h3>Закупки движутся<br/>в одном ритме</h3>
-        <div className="vl-live-route">{processStages.map((stage,index) => { const Icon = stage.icon; return <React.Fragment key={stage.key}><button className={index <= activeStage ? 'done' : ''} onClick={() => setActiveStage(index)}><Icon/><small>{stage.title}</small></button>{index < processStages.length - 1 && <i className={index < activeStage ? 'done' : ''}/>}</React.Fragment> })}</div>
-        <div className="vl-live-stats"><span><small>Запросы</small><b>{counts.requestsTotal}</b></span><span><small>PI подписано</small><b>{counts.piSigned}</b></span><span><small>В пути</small><b>{counts.transit}</b></span><span><small>К оплате</small><b>{counts.paymentDue}</b></span></div>
+      <div className="hero-showcase" aria-hidden="true">
+        <div className="showcase-layer layer-three"/><div className="showcase-layer layer-two"/>
+        <article className="showcase-card"/>
       </div>
-      <div className="vl-scroll-cue">ПРОКРУТИТЕ, ЧТОБЫ УВИДЕТЬ МАРШРУТ <i/></div>
     </section>
 
     <section className="vl-manifesto">
