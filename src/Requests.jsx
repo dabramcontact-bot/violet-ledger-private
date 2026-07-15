@@ -4,6 +4,22 @@ import { canEdit, deleteRow, exportExcel, formatDate, loadRows, requestStatuses,
 import { BusyButton, Drawer, EmptyState, ErrorBanner, Field, FormSection, PageHeader, SearchBox, StatusPill } from './components'
 import './procurement-register-premium.css'
 
+const REQUEST_AGENTS = [
+  'NINGBO RSG IMP&EXP CO.,LTD',
+  'ZHONGSHAN LINKTEX IMPORT & EXPORT CO., LTD',
+  'Ningbo White Stork Trade Co., Ltd.',
+  'Market Union Co., Ltd.',
+  'Union Source Co., Ltd.',
+  'TOP SHINE CO.,LTD',
+  'Union Service Co.,Ltd',
+  'OFFICEMART STATIONERY CO.,LTD.',
+  'NINGBO UNION GRAND IMP.&EXP. CO.,LTD.',
+  'NINGBO IHOME INTERNATIONAL TRADING CO., LTD'
+]
+
+const agentKey = value => text(value).toLocaleUpperCase('en-US').replace(/[^A-Z0-9]+/g, '')
+const normalizeAgent = value => REQUEST_AGENTS.find(agent => agentKey(agent) === agentKey(value)) || text(value)
+
 const blank = () => ({
   request_number: uid('REQ'),
   request_sent_at: today(),
@@ -52,7 +68,7 @@ export default function Requests({ profile, session, signal, initialFilter, onCr
     return (!query || haystack.includes(query.toLowerCase())) && (status === 'all' || row.status === status)
   }), [rows, query, status])
 
-  const agents = [...new Set(rows.map(row => row.agent_name).filter(Boolean))].sort()
+  const agents = REQUEST_AGENTS
   const categories = [...new Set(rows.map(row => row.category).filter(Boolean))].sort()
   const summary = Object.keys(requestStatuses).map(key => [key, rows.filter(row => row.status === key).length])
 
@@ -76,7 +92,7 @@ export default function Requests({ profile, session, signal, initialFilter, onCr
         ...editor,
         request_number: text(editor.request_number) || uid('REQ'),
         request_sent_at: editor.request_sent_at,
-        agent_name: text(editor.agent_name),
+        agent_name: normalizeAgent(editor.agent_name),
         category: text(editor.category),
         product_name: text(editor.product_name)
       }
