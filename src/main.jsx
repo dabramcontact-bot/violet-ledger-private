@@ -8,6 +8,8 @@ import PI from './PI'
 import Logistics from './Logistics'
 import Payments from './Payments'
 import './styles.css'
+import './phantom-motion-v2.css'
+import './phantom-motion-v2.js'
 
 const navItems = [
   ['dashboard', LayoutDashboard, 'Обзор'],
@@ -81,11 +83,11 @@ function App() {
     <Sidebar page={page} setPage={destination => navigate(destination)} profile={profile} open={menuOpen} setOpen={setMenuOpen}/>
     <header className="mobile-header"><button onClick={() => setMenuOpen(true)}><Menu/></button><div><b>VIOLET LEDGER</b><small>{navItems.find(([id]) => id === page)?.[2]}</small></div><span>{profile.email[0].toUpperCase()}</span></header>
     <main className="workspace">
-      {page === 'dashboard' && <Dashboard onNavigate={navigate} onCreate={create}/>}
-      {page === 'requests' && <Requests profile={profile} session={session} signal={signal} initialFilter={filter} onCreatePI={row => create('pi', row)}/>}
-      {page === 'pi' && <PI profile={profile} session={session} signal={signal} initialFilter={filter} onOpenRequest={id => navigate('requests',{id})} onCreateLogistics={row => create('logistics', row)}/>}
-      {page === 'logistics' && <Logistics profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
-      {page === 'payments' && <Payments profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
+      {page === 'dashboard' && <Dashboard onNavigate={navigate} onCreate={create}/>} 
+      {page === 'requests' && <Requests profile={profile} session={session} signal={signal} initialFilter={filter} onCreatePI={row => create('pi', row)}/>} 
+      {page === 'pi' && <PI profile={profile} session={session} signal={signal} initialFilter={filter} onOpenRequest={id => navigate('requests',{id})} onCreateLogistics={row => create('logistics', row)}/>} 
+      {page === 'logistics' && <Logistics profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>} 
+      {page === 'payments' && <Payments profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>} 
     </main>
     <nav className="mobile-nav">{navItems.map(([id,Icon,label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><Icon/><span>{label}</span></button>)}</nav>
   </div>
