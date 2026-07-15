@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Violet Ledger — Flying Figures V3</title>
+<link rel="stylesheet" href="dark-motion-v3.css" />
+</head>
+<body>
+<div class="noise"></div>
+<main>
+  <section class="hero-scroll" id="heroScroll">
+    <div class="hero" id="hero">
+      <canvas id="ribbons" aria-hidden="true"></canvas>
+      <div class="orbit a"></div><div class="orbit b"></div>
+      <div class="hero-content">
+        <div class="kicker"><i></i><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 7h14M5 17h14M8 4l-3 3 3 3M16 14l3 3-3 3"/></svg><span id="kickerText">ЗАКУПКИ ИЗ КИТАЯ · ЕДИНЫЙ МАРШРУТ</span></div>
+        <h1><span>От запроса до склада.</span><span class="accent">Всё под контролем.</span></h1>
+        <p class="lead" id="leadText">Ленты свободно летят через сцену, собираются в формы и превращают путь закупки в живую визуальную историю.</p>
+        <button class="cta"><b>＋</b> Создать запрос</button>
+      </div>
+      <div class="vertical-cue"><span>Листайте, чтобы ленты превращались в фигуры</span><i></i></div>
+      <div class="scene-label" id="sceneLabel">01 · Ленты входят в сцену</div>
+      <nav class="stage-rail" aria-label="Этапы маршрута">
+        <button class="active"><i></i>ЗАПРОС</button><button><i></i>PI</button><button><i></i>ЛОГИСТИКА</button><button><i></i>СКЛАД</button>
+      </nav>
+      <div class="transition-wash"></div>
+    </div>
+  </section>
+  <section class="after">
+    <div class="after-inner" id="afterInner">
+      <small>LIVE PROCUREMENT OVERVIEW</small>
+      <h2>Фигуры распадаются — появляется рабочий дашборд.</h2>
+      <div class="dashboard">
+        <article class="metric"><span>Активные запросы</span><b>24</b></article><article class="metric"><span>PI на сверке</span><b>6</b></article><article class="metric"><span>Грузы в пути</span><b>11</b></article><article class="metric"><span>Поставщиков</span><b>18</b></article><article class="metric"><span>Требует внимания</span><b>3</b></article>
+      </div>
+      <div class="panels"><article class="panel"><h3>Требует внимания</h3><div class="row"><span><b>PI 0716 — нет подтверждения</b><small>Union Source · 3 дня</small></span><em>ПРОСРОЧЕНО</em></div><div class="row"><span><b>REQ-0281 — без ответа</b><small>NINGBO RSG · 4 дня</small></span><em>ПРОВЕРИТЬ</em></div></article><article class="panel"><h3>Последняя активность</h3><div class="row"><span><b>Логистика обновлена</b><small>PI 0714 · сегодня</small></span></div><div class="row"><span><b>PI подписана</b><small>PI 0712 · сегодня</small></span></div></article></div>
+    </div>
+  </section>
+</main>
+<script src="dark-motion-v3.js"></script>
+</body>
+</html>
