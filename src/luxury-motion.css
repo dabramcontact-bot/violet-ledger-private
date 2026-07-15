@@ -1,0 +1,171 @@
+/* Violet Ledger luxury motion layer. Visual-only: no workflow or data changes. */
+:root{
+  --vl-motion-ease:cubic-bezier(.19,1,.22,1);
+  --vl-motion-fast:220ms;
+  --vl-motion-medium:620ms;
+  --vl-motion-slow:1100ms;
+}
+
+.phantom-story.motion-ready{
+  --vl-scroll-progress:0;
+  --vl-pointer-x:0;
+  --vl-pointer-y:0;
+}
+
+.phantom-story.motion-ready .vl-home-hero{
+  min-height:min(148vh,1320px);
+  overflow:clip;
+  isolation:isolate;
+  background:
+    radial-gradient(circle at calc(72% + var(--vl-pointer-x) * 2.5%) calc(24% + var(--vl-pointer-y) * 2.5%),rgba(173,151,211,.24),transparent 33%),
+    linear-gradient(135deg,#fbfafc 0%,#f2edf7 52%,#e8e0f1 100%);
+}
+
+.phantom-story.motion-ready .vl-home-hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:1;
+  pointer-events:none;
+  background:linear-gradient(180deg,transparent 58%,rgba(47,28,58,.08));
+  opacity:calc(var(--vl-scroll-progress) * .9);
+  transition:opacity 80ms linear;
+}
+
+.phantom-story.motion-ready .vl-hero-copy{
+  position:sticky;
+  top:clamp(96px,18vh,190px);
+  z-index:8;
+  transform:
+    translate3d(calc(var(--vl-pointer-x) * -4px),calc(var(--vl-scroll-progress) * -56px + var(--vl-pointer-y) * -3px),0)
+    scale(calc(1 - var(--vl-scroll-progress) * .055));
+  transform-origin:left center;
+  opacity:calc(1 - var(--vl-scroll-progress) * .32);
+  transition:transform 90ms linear,opacity 90ms linear;
+  will-change:transform,opacity;
+}
+
+.phantom-story.motion-ready .hero-title-line{
+  display:block;
+  transform:translate3d(calc(var(--vl-scroll-progress) * -26px),0,0);
+  transition:transform 90ms linear;
+}
+
+.phantom-story.motion-ready .hero-title-line-two{
+  transform:translate3d(calc(var(--vl-scroll-progress) * 34px),calc(var(--vl-scroll-progress) * 7px),0);
+}
+
+.phantom-story.motion-ready .hero-showcase{
+  position:sticky;
+  top:clamp(72px,12vh,136px);
+  z-index:5;
+  transform:
+    translate3d(calc(var(--vl-pointer-x) * 10px + var(--vl-scroll-progress) * -18px),calc(var(--vl-pointer-y) * 7px + var(--vl-scroll-progress) * 42px),0)
+    rotate(calc(var(--vl-pointer-x) * .7deg + var(--vl-scroll-progress) * -2deg))
+    scale(calc(1 + var(--vl-scroll-progress) * .07));
+  transition:transform 100ms linear;
+  will-change:transform;
+}
+
+.phantom-story.motion-ready .showcase-layer.layer-three{
+  transform:translate3d(calc(var(--vl-pointer-x) * 9px),calc(var(--vl-pointer-y) * 6px),0) rotate(calc(var(--vl-scroll-progress) * 7deg));
+}
+.phantom-story.motion-ready .showcase-layer.layer-two{
+  transform:translate3d(calc(var(--vl-pointer-x) * -7px),calc(var(--vl-pointer-y) * -5px),0) rotate(calc(var(--vl-scroll-progress) * -6deg));
+}
+.phantom-story.motion-ready .showcase-card{
+  transform:translate3d(calc(var(--vl-pointer-x) * 14px),calc(var(--vl-pointer-y) * 10px),0) rotate(calc(var(--vl-pointer-x) * .8deg));
+  box-shadow:0 32px 90px rgba(58,38,76,.18),inset 0 1px rgba(255,255,255,.7);
+}
+
+.phantom-story.motion-ready .hero-ambient{
+  transition:transform 100ms linear,opacity 100ms linear;
+  will-change:transform,opacity;
+}
+.phantom-story.motion-ready .ambient-one{
+  transform:translate3d(calc(var(--vl-pointer-x) * 16px),calc(var(--vl-scroll-progress) * 110px + var(--vl-pointer-y) * 10px),0) scale(calc(1 + var(--vl-scroll-progress) * .14));
+}
+.phantom-story.motion-ready .ambient-two{
+  transform:translate3d(calc(var(--vl-pointer-x) * -12px),calc(var(--vl-scroll-progress) * -86px + var(--vl-pointer-y) * -8px),0) scale(calc(1 + var(--vl-scroll-progress) * .1));
+}
+
+.phantom-story.motion-ready .vl-scroll-cue{
+  opacity:calc(1 - var(--vl-scroll-progress) * 2.4);
+  transform:translateY(calc(var(--vl-scroll-progress) * 18px));
+}
+
+.phantom-story.motion-ready .motion-reveal{
+  opacity:0;
+  transform:translate3d(0,34px,0) scale(.985);
+  filter:blur(5px);
+  transition:
+    opacity var(--vl-motion-slow) var(--vl-motion-ease),
+    transform var(--vl-motion-slow) var(--vl-motion-ease),
+    filter 850ms var(--vl-motion-ease);
+}
+.phantom-story.motion-ready .motion-reveal.is-visible{
+  opacity:1;
+  transform:none;
+  filter:none;
+}
+
+.phantom-story.motion-ready .vl-stage-list button,
+.phantom-story.motion-ready .overview-grid button,
+.phantom-story.motion-ready .dashboard-panel,
+.phantom-story.motion-ready .premium-flow-card{
+  transition:
+    transform 420ms var(--vl-motion-ease),
+    box-shadow 420ms var(--vl-motion-ease),
+    border-color 320ms ease,
+    background-color 320ms ease;
+}
+.phantom-story.motion-ready .vl-stage-list button:hover,
+.phantom-story.motion-ready .overview-grid button:hover,
+.phantom-story.motion-ready .premium-flow-card:hover{
+  transform:translateY(-3px);
+}
+
+.phantom-story.motion-ready .vl-stage-card{
+  transition:transform 780ms var(--vl-motion-ease),box-shadow 780ms var(--vl-motion-ease),background-color 600ms ease;
+}
+.phantom-story.motion-ready .vl-stage-list button.active + button{
+  transform:translateY(2px);
+}
+
+.phantom-story.motion-ready .primary,
+.phantom-story.motion-ready .vl-manifesto button,
+.phantom-story.motion-ready .vl-finance-story button,
+.phantom-story.motion-ready .vl-final-cta button{
+  transition:transform var(--vl-motion-fast) var(--vl-motion-ease),filter var(--vl-motion-fast) ease,box-shadow 420ms var(--vl-motion-ease);
+}
+.phantom-story.motion-ready .primary:hover,
+.phantom-story.motion-ready .vl-manifesto button:hover,
+.phantom-story.motion-ready .vl-finance-story button:hover,
+.phantom-story.motion-ready .vl-final-cta button:hover{
+  transform:translateY(-1px) scale(1.012);
+}
+.phantom-story.motion-ready button:active{transform:scale(.985)!important}
+
+@media(max-width:850px){
+  .phantom-story.motion-ready .vl-home-hero{min-height:118vh}
+  .phantom-story.motion-ready .vl-hero-copy{top:92px;transform:translate3d(0,calc(var(--vl-scroll-progress) * -24px),0) scale(calc(1 - var(--vl-scroll-progress) * .025))}
+  .phantom-story.motion-ready .hero-showcase{top:260px;transform:translate3d(0,calc(var(--vl-scroll-progress) * 24px),0) scale(calc(.88 + var(--vl-scroll-progress) * .03))}
+}
+
+@media(prefers-reduced-motion:reduce){
+  .phantom-story.motion-ready .vl-home-hero{min-height:auto}
+  .phantom-story.motion-ready .vl-hero-copy,
+  .phantom-story.motion-ready .hero-showcase,
+  .phantom-story.motion-ready .hero-title-line,
+  .phantom-story.motion-ready .hero-ambient,
+  .phantom-story.motion-ready .showcase-layer,
+  .phantom-story.motion-ready .showcase-card,
+  .phantom-story.motion-ready .motion-reveal{
+    position:relative;
+    top:auto;
+    transform:none!important;
+    opacity:1!important;
+    filter:none!important;
+    transition:none!important;
+  }
+}
