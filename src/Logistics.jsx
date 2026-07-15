@@ -3,13 +3,24 @@ import { Download, PackagePlus, Pencil, Plus, Trash2, Truck } from 'lucide-react
 import { calculateAllocation, canEdit, currencies, deleteRow, exportExcel, formatDate, formatMoney, loadRows, logisticsStatuses, number, saveRow, text, uid } from './data'
 import { BusyButton, Drawer, EmptyState, ErrorBanner, Field, FormSection, PageHeader, SearchBox, StatusPill } from './components'
 
-const itemBlank = seed => ({ product_name: seed?.product_name || '', article: seed?.article || '', quantity: seed?.quantity || '', product_value: seed?.total_amount || '', manual_cost: '' })
-const blank = seed => ({
-  internal_number: uid('LOG'), pi_id: seed?.id || null, pi_number: seed?.pi_number || '', article: seed?.article || '', product_name: seed?.product_name || '',
-  supplier: seed?.supplier || '', quantity: seed?.quantity || '', ready_date: '', departure_date: '', warehouse_date: '', logistics_company: '',
-  delivery_method: '', transport_document: '', status: 'waiting', logistics_cost: '', logistics_currency: seed?.currency || 'CNY', additional_cost: '',
-  allocation_method: 'quantity', items: seed ? [itemBlank(seed)] : [itemBlank()], comment: '', responsible: ''
+const itemBlank = seed => ({
+  product_name: seed?.product_name || '',
+  article: seed?.article || '',
+  quantity: seed?.quantity || '',
+  product_value: seed?.total_amount ?? (Number(seed?.quantity || 0) * Number(seed?.unit_price || 0) || ''),
+  manual_cost: ''
 })
+const piItems = seed => Array.isArray(seed?.items) && seed.items.length ? seed.items.map(itemBlank) : seed ? [itemBlank(seed)] : [itemBlank()]
+const blank = seed => {
+  const items = piItems(seed)
+  const first = items[0] || {}
+  return {
+    internal_number: uid('LOG'), pi_id: seed?.id || null, pi_number: seed?.pi_number || '', article: first.article || seed?.article || '', product_name: first.product_name || seed?.product_name || '',
+    supplier: seed?.supplier || '', quantity: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || seed?.quantity || '', ready_date: '', departure_date: '', warehouse_date: '', logistics_company: '',
+    delivery_method: '', transport_document: '', status: 'waiting', logistics_cost: '', logistics_currency: seed?.currency || 'CNY', additional_cost: '',
+    allocation_method: 'quantity', items, comment: '', responsible: ''
+  }
+}
 function normalize(row) { return { ...blank(), ...row, items: Array.isArray(row.items) && row.items.length ? row.items : [itemBlank(row)] } }
 
 export default function Logistics({ profile, session, signal, initialFilter, onOpenPI }) {
@@ -45,7 +56,9 @@ export default function Logistics({ profile, session, signal, initialFilter, onO
   function selectPI(id) {
     const source = pis.find(item => item.id === id)
     if (!source) { setEditor({ ...editor, pi_id: null }); return }
-    setEditor(current => ({ ...current, pi_id: source.id, pi_number: source.pi_number, supplier: source.supplier, article: source.article, product_name: source.product_name, quantity: source.quantity, logistics_currency: source.currency, items: [itemBlank(source)] }))
+    const items = piItems(source)
+    const first = items[0] || {}
+    setEditor(current => ({ ...current, pi_id: source.id, pi_number: source.pi_number, supplier: source.supplier, article: first.article || source.article, product_name: first.product_name || source.product_name, quantity: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || source.quantity, logistics_currency: source.currency, items }))
   }
   function updateItem(index, key, value) { setEditor(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item) })) }
   function removeItem(index) { setEditor(current => ({ ...current, items: current.items.filter((_, itemIndex) => itemIndex !== index) })) }

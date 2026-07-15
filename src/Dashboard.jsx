@@ -64,8 +64,8 @@ export default function Dashboard({ onNavigate, onCreate }) {
 
   const overview = [
     ['requests', 'request', 'Запросы без ответа', data.requests.filter(row => row.status === 'request').length, 'Ждут предложения'],
-    ['requests', 'offer', 'Предложения получены', counts.offers, 'Готовы к просчёту'],
-    ['requests', 'calculation', 'Внесено в просчёт', counts.calculated, 'Этап завершён'],
+    ['requests', 'offer', 'Предложения получены', counts.offers, 'Готовы к расчёту'],
+    ['requests', 'calculation', 'Внесено в расчёт', counts.calculated, 'Этап завершён'],
     ['pi', 'verification', 'PI на сверке', counts.piReview, 'Характеристики'],
     ['pi', 'confirmed', 'PI к подписанию', data.pis.filter(row => row.status === 'confirmed').length, 'Готовы к подписи'],
     ['pi', 'ved', 'Передано в ВЭД', counts.piVed, 'Контроль двух писем'],
@@ -142,7 +142,7 @@ export default function Dashboard({ onNavigate, onCreate }) {
           <article className="premium-flow-card premium-flow-requests">
             <button className="premium-card-action" onClick={() => onNavigate('requests')} aria-label="Открыть реестр запросов"><ArrowRight/></button><h3>Все запросы<br/>в одном месте.</h3><p>Централизованный контроль каждой позиции: активная работа, полученные предложения и общий объём закупок.</p>
             <div className="premium-request-document" aria-hidden="true"><i/><i/><i/><i/><span><Package/></span></div>
-            <div className="premium-request-summary"><div className="premium-summary-main"><span className="premium-summary-icon"><ClipboardList/></span><span className="premium-summary-copy"><small>ОБЩАЯ МАТРИЦА</small><b>Активные запросы</b></span><strong>{counts.requestsActive}</strong></div><div className="premium-summary-stats"><span><small>Всего</small><b>{counts.requestsTotal}</b></span><span><small>Предложения</small><b>{counts.offers}</b></span><span><small>В просчёте</small><b>{counts.calculated}</b></span></div></div>
+            <div className="premium-request-summary"><div className="premium-summary-main"><span className="premium-summary-icon"><ClipboardList/></span><span className="premium-summary-copy"><small>ОБЩАЯ МАТРИЦА</small><b>Активные запросы</b></span><strong>{counts.requestsActive}</strong></div><div className="premium-summary-stats"><span><small>Всего</small><b>{counts.requestsTotal}</b></span><span><small>Предложения</small><b>{counts.offers}</b></span><span><small>В расчёте</small><b>{counts.calculated}</b></span></div></div>
           </article>
           <article className="premium-flow-card premium-flow-pi">
             <button className="premium-card-action" onClick={() => onNavigate('pi')} aria-label="Открыть PI"><ArrowRight/></button><h3>PI движется быстро.<br/>Каждый шаг виден.</h3><p>Сразу понятно, что находится на сверке, что подписано и какие документы уже переданы в ВЭД.</p>
