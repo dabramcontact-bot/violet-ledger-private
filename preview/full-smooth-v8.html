@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Violet Ledger — Full Smooth Dynamic V8</title>
+  <link rel="stylesheet" href="full-smooth-v8.css" />
+</head>
+<body>
+  <div class="noise"></div>
+  <main>
+    <section class="hero-shell">
+      <section class="hero" id="hero">
+        <canvas id="scene" aria-hidden="true"></canvas>
+        <div class="hero-content">
+          <div class="kicker"><i></i>ЗАКУПКИ ИЗ КИТАЯ · ЕДИНЫЙ МАРШРУТ</div>
+          <h1><span>От запроса до склада.</span><span class="accent">Всё под контролем.</span></h1>
+          <p class="lead">Запросы, PI, поставщики и логистика — в едином пространстве с прозрачными сроками, статусами и ответственными.</p>
+          <button class="cta"><b>＋</b> Создать запрос</button>
+        </div>
+        <div class="scene-label" id="sceneLabel">01 · Поток набирает скорость</div>
+        <nav class="stage-rail" aria-label="Этапы маршрута">
+          <button class="active"><i></i>ЗАПРОС</button><button><i></i>PI</button><button><i></i>ЛОГИСТИКА</button><button><i></i>СКЛАД</button>
+        </nav>
+        <div class="auto-note">SMOOTH AUTO MOTION · 20 SEC LOOP</div>
+        <div class="transition-wash"></div>
+      </section>
+    </section>
+
+    <section class="after">
+      <div class="after-inner" id="afterInner">
+        <small>LIVE PROCUREMENT OVERVIEW</small>
+        <h2>После истории — рабочий дашборд.</h2>
+
+        <div class="dashboard">
+          <article class="metric"><span>Активные запросы</span><b>24</b><em>+4 за неделю</em></article>
+          <article class="metric"><span>PI на сверке</span><b>6</b><em>2 требуют ответа</em></article>
+          <article class="metric"><span>Грузы в пути</span><b>11</b><em>3 прибудут скоро</em></article>
+          <article class="metric"><span>Поставщиков</span><b>18</b><em>9 активных</em></article>
+          <article class="metric attention"><span>Требует внимания</span><b>3</b><em>Есть просрочки</em></article>
+        </div>
+
+        <div class="panels">
+          <article class="panel attention-panel">
+            <div class="panel-head"><div><small>КОНТРОЛЬ СРОКОВ</small><h3>Требует внимания</h3></div><button>Все задачи</button></div>
+            <div class="row">
+              <span><b>PI 0716 — нет подтверждения</b><small>Union Source · ответ ожидается 3 дня</small></span>
+              <em class="danger">ПРОСРОЧЕНО</em>
+            </div>
+            <div class="row">
+              <span><b>REQ-0281 — поставщик не ответил</b><small>NINGBO RSG · запрос отправлен 4 дня назад</small></span>
+              <em class="warning">ПРОВЕРИТЬ</em>
+            </div>
+            <div class="row">
+              <span><b>PI 0714 — не указана дата прибытия</b><small>Market Union · логистика</small></span>
+              <em class="neutral">ДОПОЛНИТЬ</em>
+            </div>
+          </article>
+
+          <article class="panel activity-panel">
+            <div class="panel-head"><div><small>ПОСЛЕДНИЕ ИЗМЕНЕНИЯ</small><h3>Активность</h3></div><button>История</button></div>
+            <div class="timeline-row"><i></i><span><b>Логистика обновлена</b><small>PI 0714 · сегодня, 10:42</small></span></div>
+            <div class="timeline-row"><i></i><span><b>PI подписана</b><small>PI 0712 · сегодня, 09:18</small></span></div>
+            <div class="timeline-row"><i></i><span><b>Получено предложение</b><small>REQ-0278 · вчера, 17:04</small></span></div>
+          </article>
+        </div>
+
+        <div class="table-card">
+          <div class="table-head"><div><small>ТЕКУЩАЯ РАБОТА</small><h3>Активные запросы и поставки</h3></div><button>Открыть все</button></div>
+          <div class="table-row table-labels"><span>ЗАПРОС</span><span>ПОСТАВЩИК</span><span>ЭТАП</span><span>ОТВЕТСТВЕННЫЙ</span><span>СРОК</span></div>
+          <div class="table-row"><span><b>REQ-0284</b><small>Садовая мебель</small></span><span>TOP SHINE</span><span><em class="status pi">PI</em></span><span>Анна</span><span>18 июля</span></div>
+          <div class="table-row"><span><b>REQ-0281</b><small>Освещение</small></span><span>NINGBO RSG</span><span><em class="status request">ЗАПРОС</em></span><span>Мария</span><span class="late">Просрочено</span></div>
+          <div class="table-row"><span><b>PI 0714</b><small>Посуда</small></span><span>Market Union</span><span><em class="status logistics">В ПУТИ</em></span><span>Дарья</span><span>2 августа</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script src="smooth-dynamic-v8.js"></script>
+</body>
+</html>
