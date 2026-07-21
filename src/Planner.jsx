@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Clock3, CopyPlus, ListTodo, Pencil, PlayCircle, Plus, Trash2, UserRound, XCircle } from 'lucide-react'
+import { CalendarDays, Check, CheckCircle2, ChevronLeft, ChevronRight, CircleDashed, Clock3, CopyPlus, ListTodo, Pencil, PlayCircle, Plus, Sparkles, Trash2, UserRound, XCircle } from 'lucide-react'
 import { canEdit, deleteRow, saveRow, supabase, text, today } from './data'
-import { BusyButton, Drawer, EmptyState, ErrorBanner, Field, FormSection, PageHeader, SearchBox, StatusPill } from './components'
+import { BusyButton, Drawer, EmptyState, ErrorBanner, Field, FormSection, SearchBox, StatusPill } from './components'
 import './planner.css'
 
 const TABLE = 'daily_planner_tasks'
@@ -28,8 +28,25 @@ function addDays(value, amount) {
   return date.toISOString().slice(0, 10)
 }
 
+function addMonths(value, amount) {
+  const date = new Date(`${value}T12:00:00`)
+  date.setDate(1)
+  date.setMonth(date.getMonth() + amount)
+  return date.toISOString().slice(0, 10)
+}
+
 function dateTitle(value) {
   return new Intl.DateTimeFormat('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    .format(new Date(`${value}T12:00:00`))
+}
+
+function compactDateTitle(value) {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', weekday: 'long' })
+    .format(new Date(`${value}T12:00:00`))
+}
+
+function monthTitle(value) {
+  return new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' })
     .format(new Date(`${value}T12:00:00`))
 }
 
@@ -40,16 +57,24 @@ function shortWeekday(value) {
 }
 
 function dayNumber(value) {
-  return new Intl.DateTimeFormat('ru-RU', { day: '2-digit' }).format(new Date(`${value}T12:00:00`))
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric' }).format(new Date(`${value}T12:00:00`))
 }
 
-function monthShort(value) {
-  return new Intl.DateTimeFormat('ru-RU', { month: 'short' })
-    .format(new Date(`${value}T12:00:00`))
-    .replace('.', '')
+function monthCells(value) {
+  const current = new Date(`${value}T12:00:00`)
+  const first = new Date(current.getFullYear(), current.getMonth(), 1, 12)
+  const offset = (first.getDay() + 6) % 7
+  const firstValue = first.toISOString().slice(0, 10)
+  return Array.from({ length: 42 }, (_, index) => addDays(firstValue, index - offset))
+}
+
+function sameMonth(left, right) {
+  return left.slice(0, 7) === right.slice(0, 7)
 }
 
 const timeValue = value => value ? String(value).slice(0, 5) : ''
+const assigneeName = value => text(value).split('@')[0] || 'Не назначен'
+const assigneeInitial = value => assigneeName(value).slice(0, 1).toUpperCase()
 
 const blank = (date, email) => ({
   task_date: date,
@@ -130,7 +155,8 @@ export default function Planner({ profile, session, signal }) {
     if (signal?.type === 'planner') setEditor(blank(selectedDate, profile?.email))
   }, [signal])
 
-  const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 3)), [selectedDate])
+  const calendarDays = useMemo(() => monthCells(selectedDate), [selectedDate])
+  const nearbyDays = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(selectedDate, index - 3)), [selectedDate])
   const dayRows = useMemo(() => rows
     .filter(row => row.task_date === selectedDate)
     .filter(row => {
@@ -150,10 +176,12 @@ export default function Planner({ profile, session, signal }) {
     total: allDayRows.length,
     done: allDayRows.filter(row => row.status === 'done').length,
     inProgress: allDayRows.filter(row => row.status === 'in_progress').length,
+    overdue: allDayRows.filter(row => row.status === 'cancelled').length,
     remaining: allDayRows.filter(row => !['done', 'cancelled'].includes(row.status)).length
   }
   const progress = summary.total ? Math.round(summary.done / summary.total * 100) : 0
   const categories = [...new Set(rows.map(row => row.category).filter(Boolean))].sort()
+  const prioritySummary = Object.keys(priorityLabels).map(key => [key, allDayRows.filter(row => row.priority === key && row.status !== 'cancelled').length])
 
   async function save() {
     if (!editor || !text(editor.task_date) || !text(editor.title)) {
@@ -244,42 +272,54 @@ export default function Planner({ profile, session, signal }) {
     }
   }
 
-  return <div className="page planner-page">
-    <PageHeader eyebrow="DAILY PLANNER" title="Планер" description="Ежедневные задачи команды: время, приоритет, ответственный и текущий статус." action={editable ? () => setEditor(blank(selectedDate, profile?.email)) : null} actionLabel="Новая задача" icon={Plus}/>
+  return <div className="page planner-page planner-redesign">
+    <header className="planner-hero">
+      <div><small>DAILY PLANNER</small><h1>Планер</h1><p>Ваш день под контролем</p></div>
+      <div className="planner-hero-actions">
+        <div className="planner-date-switcher"><button onClick={() => setSelectedDate(addDays(selectedDate, -1))} title="Предыдущий день"><ChevronLeft/></button><button className="planner-date-label" onClick={() => setSelectedDate(today())}>{compactDateTitle(selectedDate)}</button><button onClick={() => setSelectedDate(addDays(selectedDate, 1))} title="Следующий день"><ChevronRight/></button></div>
+        <button className="planner-today-button" onClick={() => setSelectedDate(today())}>Сегодня</button>
+        {editable && <button className="primary planner-new-task" onClick={() => setEditor(blank(selectedDate, profile?.email))}><Plus/> Новая задача</button>}
+      </div>
+    </header>
+
     <ErrorBanner error={error} onClose={() => setError('')}/>
 
-    <section className="planner-date-card">
-      <div className="planner-date-heading"><small>ВЫБРАННЫЙ ДЕНЬ</small><h2>{dateTitle(selectedDate)}</h2><p>{summary.total ? `Выполнено ${summary.done} из ${summary.total}` : 'На этот день задач пока нет'}</p></div>
-      <div className="planner-date-actions">
-        <button onClick={() => setSelectedDate(addDays(selectedDate, -1))} title="Предыдущий день"><ChevronLeft/></button>
-        <button className="planner-today" onClick={() => setSelectedDate(today())}>Сегодня</button>
-        <input type="date" value={selectedDate} onChange={event => setSelectedDate(event.target.value)}/>
-        <button onClick={() => setSelectedDate(addDays(selectedDate, 1))} title="Следующий день"><ChevronRight/></button>
-      </div>
-      <div className="planner-progress"><span style={{ width: `${progress}%` }}/></div>
+    <section className="planner-overview-cards">
+      <article className="overview-total"><span><small>Всего задач</small><b>{summary.total}</b></span><CalendarDays/></article>
+      <article className="overview-progress"><span><small>В работе</small><b>{summary.inProgress}</b></span><PlayCircle/></article>
+      <article className="overview-done"><span><small>Выполнено</small><b>{summary.done}</b></span><CheckCircle2/></article>
+      <article className="overview-cancelled"><span><small>Отменено</small><b>{summary.overdue}</b></span><XCircle/></article>
     </section>
 
-    <section className="planner-week-strip">{weekDays.map(date => <button key={date} className={`${date === selectedDate ? 'active' : ''} ${date === today() ? 'today' : ''}`} onClick={() => setSelectedDate(date)}>
-      <small>{shortWeekday(date)}</small><b>{dayNumber(date)}</b><span>{monthShort(date)}</span><i>{rows.filter(row => row.task_date === date && row.status !== 'cancelled').length}</i>
-    </button>)}</section>
+    <section className="planner-content-grid">
+      <section className="planner-day-card">
+        <header className="planner-day-header"><div><small>МОЙ ДЕНЬ</small><h2>{dateTitle(selectedDate)}</h2><p>{summary.total ? `Выполнено ${summary.done} из ${summary.total}` : 'Свободный день — можно запланировать главное'}</p></div><div className="planner-day-progress"><b>{progress}%</b><span><i style={{ width: `${progress}%` }}/></span></div></header>
 
-    <section className="planner-metrics">
-      <article><CalendarDays/><span><small>Всего задач</small><b>{summary.total}</b></span></article>
-      <article><CircleDashed/><span><small>Осталось</small><b>{summary.remaining}</b></span></article>
-      <article><PlayCircle/><span><small>В работе</small><b>{summary.inProgress}</b></span></article>
-      <article><CheckCircle2/><span><small>Выполнено</small><b>{summary.done}</b></span></article>
-    </section>
+        <div className="planner-nearby-days">{nearbyDays.map(date => <button key={date} className={`${date === selectedDate ? 'active' : ''} ${date === today() ? 'today' : ''}`} onClick={() => setSelectedDate(date)}><small>{shortWeekday(date)}</small><b>{dayNumber(date)}</b><i>{rows.filter(row => row.task_date === date && row.status !== 'cancelled').length}</i></button>)}</div>
 
-    <section className="register-panel planner-panel">
-      <div className="register-head"><div><small>ПЛАН НА ДЕНЬ</small><h2>Задачи</h2><p>{dayRows.length} из {allDayRows.length}</p></div>{editable && <button className="secondary" onClick={() => setEditor(blank(selectedDate, profile?.email))}><Plus/> Добавить</button>}</div>
-      <div className="filters"><SearchBox value={query} onChange={setQuery} placeholder="Задача, категория или ответственный"/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select value={assignee} onChange={event => setAssignee(event.target.value)}><option value="all">Все ответственные</option>{assignees.map(email => <option key={email} value={email}>{email}</option>)}</select></div>
+        <div className="planner-toolbar"><SearchBox value={query} onChange={setQuery} placeholder="Найти задачу"/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select><select value={assignee} onChange={event => setAssignee(event.target.value)}><option value="all">Все ответственные</option>{assignees.map(email => <option key={email} value={email}>{email}</option>)}</select></div>
 
-      {loading ? <div className="loading-state">Загрузка планера…</div> : !dayRows.length ? <EmptyState icon={ListTodo} title="Задач на день нет" text={allDayRows.length ? 'Измените поиск или фильтры.' : 'Добавьте первую задачу на выбранный день.'} action={editable ? () => setEditor(blank(selectedDate, profile?.email)) : null} actionLabel="Добавить задачу"/> : <div className="planner-task-list">{dayRows.map(row => <article key={row.id} className={`planner-task status-${row.status} priority-${row.priority}`}>
-        <button className="planner-task-check" disabled={!editable} onClick={() => updateStatus(row, row.status === 'done' ? 'planned' : 'done')} title={row.status === 'done' ? 'Вернуть в план' : 'Отметить выполненной'}>{row.status === 'done' ? <Check/> : row.status === 'in_progress' ? <PlayCircle/> : row.status === 'cancelled' ? <XCircle/> : <CircleDashed/>}</button>
-        <div className="planner-task-time"><Clock3/><b>{taskTime(row)}</b></div>
-        <div className="planner-task-main"><div><h3>{row.title}</h3><span className={`planner-priority priority-${row.priority}`}>{priorityLabels[row.priority]}</span></div>{row.description && <p>{row.description}</p>}<footer>{row.category && <span>{row.category}</span>}<span><UserRound/>{row.assignee_email || 'Не назначен'}</span><StatusPill value={row.status} labels={statusLabels}/></footer></div>
-        <div className="planner-task-actions">{editable && <button title="Перенести копию на завтра" onClick={() => moveToTomorrow(row)}><CopyPlus/></button>}<button title="Открыть" onClick={() => setEditor(normalize(row))}><Pencil/></button>{editable && <button className="danger" title="Удалить" onClick={() => remove(row)}><Trash2/></button>}</div>
-      </article>)}</div>}
+        {loading ? <div className="loading-state">Загрузка планера…</div> : !dayRows.length ? <EmptyState icon={ListTodo} title="Задач на день нет" text={allDayRows.length ? 'Измените поиск или фильтры.' : 'Добавьте первую задачу на выбранный день.'} action={editable ? () => setEditor(blank(selectedDate, profile?.email)) : null} actionLabel="Добавить задачу"/> : <div className="planner-clean-list">{dayRows.map(row => <article key={row.id} className={`planner-clean-task status-${row.status} priority-${row.priority}`}>
+          <button className="planner-clean-check" disabled={!editable} onClick={() => updateStatus(row, row.status === 'done' ? 'planned' : 'done')} title={row.status === 'done' ? 'Вернуть в план' : 'Отметить выполненной'}>{row.status === 'done' ? <Check/> : row.status === 'in_progress' ? <PlayCircle/> : row.status === 'cancelled' ? <XCircle/> : <CircleDashed/>}</button>
+          <div className="planner-clean-time"><b>{taskTime(row)}</b>{row.category && <small>{row.category}</small>}</div>
+          <div className="planner-clean-main"><div><h3>{row.title}</h3><span className={`planner-priority priority-${row.priority}`}>{priorityLabels[row.priority]}</span></div>{row.description && <p>{row.description}</p>}</div>
+          <div className="planner-clean-assignee"><span>{assigneeInitial(row.assignee_email)}</span><b>{assigneeName(row.assignee_email)}</b></div>
+          <StatusPill value={row.status} labels={statusLabels}/>
+          <div className="planner-clean-actions">{editable && <button title="Копировать на завтра" onClick={() => moveToTomorrow(row)}><CopyPlus/></button>}<button title="Открыть" onClick={() => setEditor(normalize(row))}><Pencil/></button>{editable && <button className="danger" title="Удалить" onClick={() => remove(row)}><Trash2/></button>}</div>
+        </article>)}</div>}
+      </section>
+
+      <aside className="planner-side-stack">
+        <section className="planner-calendar-card">
+          <header><button onClick={() => setSelectedDate(addMonths(selectedDate, -1))}><ChevronLeft/></button><h3>{monthTitle(selectedDate)}</h3><button onClick={() => setSelectedDate(addMonths(selectedDate, 1))}><ChevronRight/></button></header>
+          <div className="planner-calendar-weekdays">{['Пн','Вт','Ср','Чт','Пт','Сб','Вс'].map(day => <span key={day}>{day}</span>)}</div>
+          <div className="planner-calendar-grid">{calendarDays.map(date => <button key={date} className={`${date === selectedDate ? 'active' : ''} ${date === today() ? 'today' : ''} ${sameMonth(date, selectedDate) ? '' : 'muted'}`} onClick={() => setSelectedDate(date)}><span>{dayNumber(date)}</span>{rows.some(row => row.task_date === date && row.status !== 'cancelled') && <i/>}</button>)}</div>
+        </section>
+
+        <section className="planner-priorities-card"><header><div><small>РАСПРЕДЕЛЕНИЕ</small><h3>Приоритеты</h3></div><span>{summary.total}</span></header><div>{prioritySummary.map(([key, value]) => <article key={key}><i className={`priority-dot priority-${key}`}/><span>{priorityLabels[key]}</span><b>{value}</b></article>)}</div></section>
+
+        <section className="planner-focus-card"><Sparkles/><small>ФОКУС ДНЯ</small><h3>{summary.remaining ? 'Сосредоточьтесь на главном' : 'На сегодня всё готово'}</h3><p>{summary.remaining ? `Осталось ${summary.remaining} ${summary.remaining === 1 ? 'задача' : 'задачи'}. Двигайтесь спокойно, по одной.` : 'Можно завершать день с чистой головой.'}</p><div className="planner-focus-progress"><span style={{ '--planner-progress': `${progress * 3.6}deg` }}><b>{progress}%</b></span><small>прогресс дня</small></div></section>
+      </aside>
     </section>
 
     {editor && <Drawer title={editor.id ? editor.title : 'Новая задача'} subtitle={dateTitle(editor.task_date || selectedDate).toUpperCase()} onClose={() => setEditor(null)} footer={<><span className="footer-note">Задача будет доступна всей команде</span>{editor.id && editable && <button className="danger-button" onClick={() => remove(editor)}><Trash2/> Удалить</button>}<BusyButton className="primary" busy={saving} onClick={save}>Сохранить</BusyButton></>}>
