@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowRight, CircleAlert, ClipboardList, FileCheck2, LayoutDashboard, LogOut, Menu, ShieldCheck, Truck, WalletCards, X } from 'lucide-react'
+import { ArrowRight, CalendarRange, CircleAlert, ClipboardList, FileCheck2, LayoutDashboard, LogOut, Menu, ShieldCheck, Truck, WalletCards, X } from 'lucide-react'
 import { supabase } from './data'
 import Dashboard from './Dashboard'
+import Planner from './Planner'
 import Requests from './Requests'
 import PI from './PI'
 import Logistics from './Logistics'
@@ -11,6 +12,7 @@ import './styles.css'
 
 const navItems = [
   ['dashboard', LayoutDashboard, 'Обзор'],
+  ['planner', CalendarRange, 'Планер'],
   ['requests', ClipboardList, 'Запросы'],
   ['pi', FileCheck2, 'PI'],
   ['logistics', Truck, 'Логистика'],
@@ -81,11 +83,12 @@ function App() {
     <Sidebar page={page} setPage={destination => navigate(destination)} profile={profile} open={menuOpen} setOpen={setMenuOpen}/>
     <header className="mobile-header"><button onClick={() => setMenuOpen(true)}><Menu/></button><div><b>VIOLET LEDGER</b><small>{navItems.find(([id]) => id === page)?.[2]}</small></div><span>{profile.email[0].toUpperCase()}</span></header>
     <main className="workspace">
-      {page === 'dashboard' && <Dashboard onNavigate={navigate} onCreate={create}/>}
-      {page === 'requests' && <Requests profile={profile} session={session} signal={signal} initialFilter={filter} onCreatePI={row => create('pi', row)}/>}
-      {page === 'pi' && <PI profile={profile} session={session} signal={signal} initialFilter={filter} onOpenRequest={id => navigate('requests',{id})} onCreateLogistics={row => create('logistics', row)}/>}
-      {page === 'logistics' && <Logistics profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
-      {page === 'payments' && <Payments profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
+      {page === 'dashboard' && <Dashboard onNavigate={navigate} onCreate={create}/>} 
+      {page === 'planner' && <Planner profile={profile} session={session} signal={signal}/>} 
+      {page === 'requests' && <Requests profile={profile} session={session} signal={signal} initialFilter={filter} onCreatePI={row => create('pi', row)}/>} 
+      {page === 'pi' && <PI profile={profile} session={session} signal={signal} initialFilter={filter} onOpenRequest={id => navigate('requests',{id})} onCreateLogistics={row => create('logistics', row)}/>} 
+      {page === 'logistics' && <Logistics profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>} 
+      {page === 'payments' && <Payments profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>} 
     </main>
     <nav className="mobile-nav">{navItems.map(([id,Icon,label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><Icon/><span>{label}</span></button>)}</nav>
   </div>
