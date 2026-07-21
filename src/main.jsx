@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { ArrowRight, CircleAlert, ClipboardList, FileCheck2, LayoutDashboard, LogOut, Menu, ShieldCheck, Truck, WalletCards, X } from 'lucide-react'
+import { ArrowRight, CalendarRange, CircleAlert, ClipboardList, FileCheck2, LayoutDashboard, LogOut, Menu, ShieldCheck, Truck, WalletCards, X } from 'lucide-react'
 import { supabase } from './data'
 import Dashboard from './Dashboard'
 import Requests from './Requests'
 import PI from './PI'
 import Logistics from './Logistics'
 import Payments from './Payments'
+import Planner from './Planner'
 import './styles.css'
 
 const navItems = [
@@ -14,7 +15,8 @@ const navItems = [
   ['requests', ClipboardList, 'Запросы'],
   ['pi', FileCheck2, 'PI'],
   ['logistics', Truck, 'Логистика'],
-  ['payments', WalletCards, 'Платежи']
+  ['payments', WalletCards, 'Платежи'],
+  ['planner', CalendarRange, 'Планнер']
 ]
 
 function Login() {
@@ -86,6 +88,7 @@ function App() {
       {page === 'pi' && <PI profile={profile} session={session} signal={signal} initialFilter={filter} onOpenRequest={id => navigate('requests',{id})} onCreateLogistics={row => create('logistics', row)}/>}
       {page === 'logistics' && <Logistics profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
       {page === 'payments' && <Payments profile={profile} session={session} signal={signal} initialFilter={filter} onOpenPI={id => navigate('pi',{id})}/>}
+      {page === 'planner' && <Planner profile={profile} session={session} signal={signal}/>}
     </main>
     <nav className="mobile-nav">{navItems.map(([id,Icon,label]) => <button key={id} className={page === id ? 'active' : ''} onClick={() => navigate(id)}><Icon/><span>{label}</span></button>)}</nav>
   </div>
