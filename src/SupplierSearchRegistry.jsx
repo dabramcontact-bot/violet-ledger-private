@@ -117,7 +117,7 @@ async function downloadImport(rows) {
   downloadBlob(new Blob([zipSync(files, { level: 6 })], { type: 'application/zip' }), `${category}_6_файлов.zip`)
 }
 
-export default function SupplierSearchRegistry({ profile, session, suppliers = [] }) {
+export default function SupplierSearchRegistry({ profile, session, suppliers = [], focusBatchId = null, onFocusHandled }) {
   const fileRef = useRef(null)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
@@ -151,6 +151,17 @@ export default function SupplierSearchRegistry({ profile, session, suppliers = [
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
+
+  useEffect(() => {
+    if (!focusBatchId || !rows.length) return
+    const target = rows.find(row => row.id === focusBatchId)
+    if (target) {
+      setQuery('')
+      setStatus('all')
+      setEditor({ ...target })
+    }
+    onFocusHandled?.()
+  }, [focusBatchId, rows])
 
   const filtered = useMemo(() => rows.filter(row => {
     const haystack = [row.batch_name, row.category_level_3, row.source_file_name, row.supplier_name].join(' ').toLowerCase()
@@ -204,7 +215,7 @@ export default function SupplierSearchRegistry({ profile, session, suppliers = [
 
       const { error: insertError } = await supabase.from(TABLE).insert(payload)
       if (insertError) throw insertError
-      setSuccess(`Сохранено 6 файлов по категории «${parsed.category}». Теперь можно назначить поставщиков.`)
+      setSuccess(`Сохранено 6 файлов по категории «${parsed.category}». Они также появились в товарных запросах.`)
       await load()
     } catch (reason) {
       setError(reason)
@@ -282,12 +293,12 @@ export default function SupplierSearchRegistry({ profile, session, suppliers = [
       </section>)}</div>}
     </section>
 
-    {editor && <Drawer title={editor.batch_name} subtitle="НАЗНАЧЕНИЕ ПОСТАВЩИКУ" onClose={() => setEditor(null)} footer={<><button className="secondary" onClick={() => setEditor(null)}>Отмена</button><BusyButton className="primary" busy={saving} onClick={saveEditor}>Сохранить</BusyButton></>}>
+    {editor && <Drawer title={editor.batch_name} subtitle="НАЗНАЧЕНИЕ ПОСТАВЩИКУ" onClose={() => setEditor(null)} footer={editable ? <><button className="secondary" onClick={() => setEditor(null)}>Отмена</button><BusyButton className="primary" busy={saving} onClick={saveEditor}>Сохранить</BusyButton></> : <button className="secondary" onClick={() => setEditor(null)}>Закрыть</button>}>
       <FormSection index="01" title="Отправка файла" text="Поставщика и статус вы отмечаете вручную.">
-        <Field label="Поставщик" wide><input list="supplier-search-options" value={editor.supplier_name || ''} onChange={event => setEditor({ ...editor, supplier_name: event.target.value })} placeholder="Выберите или введите поставщика"/><datalist id="supplier-search-options">{suppliers.map(item => <option key={item} value={item}/>)}</datalist></Field>
-        <Field label="Статус"><select value={editor.status || 'not_sent'} onChange={event => setEditor({ ...editor, status: event.target.value, sent_at: event.target.value === 'not_sent' ? '' : (editor.sent_at || today()) })}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
-        <Field label="Дата отправки"><input type="date" disabled={editor.status === 'not_sent'} value={editor.sent_at || ''} onChange={event => setEditor({ ...editor, sent_at: event.target.value })}/></Field>
-        <Field label="Комментарий" wide><textarea rows="4" value={editor.notes || ''} onChange={event => setEditor({ ...editor, notes: event.target.value })} placeholder="Например, отправлено в WeChat, ждём цену до пятницы"/></Field>
+        <Field label="Поставщик" wide><input disabled={!editable} list="supplier-search-options" value={editor.supplier_name || ''} onChange={event => setEditor({ ...editor, supplier_name: event.target.value })} placeholder="Выберите или введите поставщика"/><datalist id="supplier-search-options">{suppliers.map(item => <option key={item} value={item}/>)}</datalist></Field>
+        <Field label="Статус"><select disabled={!editable} value={editor.status || 'not_sent'} onChange={event => setEditor({ ...editor, status: event.target.value, sent_at: event.target.value === 'not_sent' ? '' : (editor.sent_at || today()) })}>{Object.entries(statusLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></Field>
+        <Field label="Дата отправки"><input type="date" disabled={!editable || editor.status === 'not_sent'} value={editor.sent_at || ''} onChange={event => setEditor({ ...editor, sent_at: event.target.value })}/></Field>
+        <Field label="Комментарий" wide><textarea disabled={!editable} rows="4" value={editor.notes || ''} onChange={event => setEditor({ ...editor, notes: event.target.value })} placeholder="Например, отправлено в WeChat, ждём цену до пятницы"/></Field>
       </FormSection>
       <FormSection index="02" title="Ссылки в файле" text="Ровно пять позиций из исходного отчёта.">
         <div className="supplier-drawer-links wide-field">{(editor.links || []).map((link, index) => <a key={link} href={link} target="_blank" rel="noreferrer"><span>{index + 1}</span><b>{link}</b><ExternalLink/></a>)}</div>
