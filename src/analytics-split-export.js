@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx'
 
-const ROOT = 'requests-register-v6-root'
+const ROOT_SELECTOR = '.requests-modern'
 const TOOL_ID = 'analytics-split-tool-v1'
 let busy = false
 
@@ -62,10 +62,7 @@ function makeWorkbook(links) {
     const address = `A${10+index}`
     sheet[address].l = {Target:link,Tooltip:'Открыть товар'}
   })
-  sheet['!cols'] = [
-    {wch:95},{wch:24},{wch:18},{wch:18},{wch:26},{wch:24},{wch:20},{wch:14},
-    {wch:16},{wch:18},{wch:14},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8}
-  ]
+  sheet['!cols'] = [{wch:95},{wch:24},{wch:18},{wch:18},{wch:26},{wch:24},{wch:20},{wch:14},{wch:16},{wch:18},{wch:14},{wch:18},{wch:12},{wch:12},{wch:12},{wch:8}]
   sheet['!rows'] = [{hpt:22},{hpt:22},{hpt:22},{hpt:35},{hpt:35},{hpt:35},{hpt:28},{hpt:10},{hpt:30}]
   sheet['!autofilter'] = {ref:'A9:O14'}
   const book = XLSX.utils.book_new()
@@ -98,61 +95,25 @@ async function createArchive(file) {
 }
 
 function renderTool() {
-  const root=document.getElementById(ROOT)
+  const root=document.querySelector(ROOT_SELECTOR)
   if(!root || document.getElementById(TOOL_ID)) return
   const tool=document.createElement('div')
   tool.id=TOOL_ID
-  tool.innerHTML=`<button type="button" class="rq6-split-button" data-split-action="open">${icon('split')} Разбить аналитический файл</button><input type="file" hidden accept=".xlsx,.xls" data-split-input>`
-  root.querySelector('.rq6-panel-head')?.append(tool)
+  tool.innerHTML=`<button type="button" class="analytics-split-button" data-split-action="open">${icon('split')} Разбить аналитический файл</button><input type="file" hidden accept=".xlsx,.xls" data-split-input>`
+  root.querySelector('.register-head')?.append(tool)
 }
 
 function openModal() {
-  const root=document.getElementById(ROOT)
-  if(!root || root.querySelector('.rq6-split-modal')) return
-  root.insertAdjacentHTML('beforeend',`<div class="rq6-split-backdrop" data-split-action="close"></div><aside class="rq6-split-modal"><header><div><small>EXCEL CONVERTER</small><h2>Разбить аналитику</h2><p>Первые 30 ссылок → 6 файлов по 5 ссылок.</p></div><button type="button" data-split-action="close">${icon('close')}</button></header><section><div class="rq6-split-rule"><b>1</b><span><strong>Загрузите аналитический отчёт</strong><small>Нужны колонки «Ссылка на товар» и «Категория 3 уровня».</small></span></div><div class="rq6-split-rule"><b>2</b><span><strong>Система возьмёт первые 30 ссылок</strong><small>Порядок строк сохраняется.</small></span></div><div class="rq6-split-rule"><b>3</b><span><strong>Скачаете ZIP с 6 файлами</strong><small>В каждом Excel-файле ровно 5 ссылок.</small></span></div><div class="rq6-split-status" data-split-status></div></section><footer><button type="button" class="rq6-secondary" data-split-action="close">Отмена</button><button type="button" class="rq6-primary" data-split-action="choose">${icon('upload')} Выбрать Excel</button></footer></aside>`)
+  const root=document.querySelector(ROOT_SELECTOR)
+  if(!root || document.querySelector('.analytics-split-modal')) return
+  document.body.insertAdjacentHTML('beforeend',`<div class="analytics-split-backdrop" data-split-action="close"></div><aside class="analytics-split-modal"><header><div><small>EXCEL CONVERTER</small><h2>Разбить аналитику</h2><p>Первые 30 ссылок → 6 файлов по 5 ссылок.</p></div><button type="button" data-split-action="close">${icon('close')}</button></header><section><div class="analytics-split-rule"><b>1</b><span><strong>Загрузите аналитический отчёт</strong><small>Нужны колонки «Ссылка на товар» и «Категория 3 уровня».</small></span></div><div class="analytics-split-rule"><b>2</b><span><strong>Система возьмёт первые 30 ссылок</strong><small>Порядок строк сохраняется.</small></span></div><div class="analytics-split-rule"><b>3</b><span><strong>Скачаете ZIP с 6 файлами</strong><small>В каждом Excel-файле ровно 5 ссылок.</small></span></div><div class="analytics-split-status" data-split-status></div></section><footer><button type="button" class="analytics-secondary" data-split-action="close">Отмена</button><button type="button" class="analytics-primary" data-split-action="choose">${icon('upload')} Выбрать Excel</button></footer></aside>`)
 }
 
-function closeModal() {
-  document.querySelector('.rq6-split-backdrop')?.remove()
-  document.querySelector('.rq6-split-modal')?.remove()
-}
+function closeModal() { document.querySelector('.analytics-split-backdrop')?.remove(); document.querySelector('.analytics-split-modal')?.remove() }
+function setStatus(text,tone='info') { const node=document.querySelector('[data-split-status]'); if(!node)return; node.className=`analytics-split-status ${tone}`; node.innerHTML=text?`${tone==='success'?icon('check'):icon('file')}<span>${text}</span>`:'' }
+async function handleFile(file) { if(!file||busy)return; busy=true; setStatus('Создаю 6 Excel-файлов…'); try { const category=await createArchive(file); setStatus(`Готово. Архив «${category}_6_файлов.zip» скачан.`,'success') } catch(error) { console.error(error); setStatus(error?.message||'Не удалось обработать файл.','error') } finally { busy=false; const input=document.querySelector('[data-split-input]'); if(input)input.value='' } }
 
-function setStatus(text,tone='info') {
-  const node=document.querySelector('[data-split-status]')
-  if(!node) return
-  node.className=`rq6-split-status ${tone}`
-  node.innerHTML=text?`${tone==='success'?icon('check'):icon('file')}<span>${text}</span>`:''
-}
-
-async function handleFile(file) {
-  if(!file || busy) return
-  busy=true
-  setStatus('Создаю 6 Excel-файлов…')
-  try {
-    const category=await createArchive(file)
-    setStatus(`Готово. Архив «${category}_6_файлов.zip» скачан.`,'success')
-  } catch(error) {
-    console.error(error)
-    setStatus(error?.message||'Не удалось обработать файл.','error')
-  } finally {
-    busy=false
-    const input=document.querySelector('[data-split-input]')
-    if(input) input.value=''
-  }
-}
-
-document.addEventListener('click',event=>{
-  const node=event.target.closest('[data-split-action]')
-  if(!node) return
-  const action=node.dataset.splitAction
-  if(action==='open') openModal()
-  if(action==='close') closeModal()
-  if(action==='choose') document.querySelector('[data-split-input]')?.click()
-},true)
-
-document.addEventListener('change',event=>{
-  if(event.target.matches('[data-split-input]')) handleFile(event.target.files?.[0])
-},true)
-
+document.addEventListener('click',event=>{ const node=event.target.closest('[data-split-action]'); if(!node)return; const action=node.dataset.splitAction; if(action==='open')openModal(); if(action==='close')closeModal(); if(action==='choose')document.querySelector('[data-split-input]')?.click() },true)
+document.addEventListener('change',event=>{ if(event.target.matches('[data-split-input]'))handleFile(event.target.files?.[0]) },true)
 new MutationObserver(renderTool).observe(document.getElementById('root')||document.body,{childList:true,subtree:true})
 renderTool()
