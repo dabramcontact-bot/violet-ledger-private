@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardList, Download, FilePlus2, Pencil, Plus, Send, Trash2 } from 'lucide-react'
+import { CheckCircle2, ClipboardList, Download, FilePlus2, Layers3, Pencil, Plus, Send, Trash2 } from 'lucide-react'
 import { canEdit, deleteRow, exportExcel, formatDate, loadRows, requestStatuses, saveRow, text, today, uid } from './data'
 import { BusyButton, Drawer, EmptyState, ErrorBanner, Field, FormSection, PageHeader, SearchBox, StatusPill } from './components'
+import SupplierSearchRegistry from './SupplierSearchRegistry'
 import './procurement-register-premium.css'
 
 const REQUEST_AGENTS = [
@@ -45,6 +46,7 @@ export default function Requests({ profile, session, signal, initialFilter, onCr
   const [editor, setEditor] = useState(null)
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
+  const [workspace, setWorkspace] = useState('requests')
   const editable = canEdit(profile)
 
   async function load() {
@@ -55,13 +57,13 @@ export default function Requests({ profile, session, signal, initialFilter, onCr
   }
 
   useEffect(() => { load() }, [])
-  useEffect(() => { if (signal?.type === 'requests') setEditor(blank()) }, [signal])
+  useEffect(() => { if (signal?.type === 'requests') { setWorkspace('requests'); setEditor(blank()) } }, [signal])
   useEffect(() => {
     if (signal?.type !== 'open-requests' || !rows.length) return
     const row = rows.find(item => item.id === signal.id)
-    if (row) setEditor(normalize(row))
+    if (row) { setWorkspace('requests'); setEditor(normalize(row)) }
   }, [signal, rows])
-  useEffect(() => { if (initialFilter?.status) setStatus(initialFilter.status) }, [initialFilter])
+  useEffect(() => { if (initialFilter?.status) { setWorkspace('requests'); setStatus(initialFilter.status) } }, [initialFilter])
 
   const filtered = useMemo(() => rows.filter(row => {
     const haystack = [row.request_number, row.product_name, row.category, row.agent_name].join(' ').toLowerCase()
@@ -123,30 +125,38 @@ export default function Requests({ profile, session, signal, initialFilter, onCr
   }
 
   return <div className="page procurement-page requests-modern">
-    <PageHeader eyebrow="REQUEST FLOW" title="Запросы" description="Только самое необходимое: дата, агент, категория, товар и текущий статус." action={editable ? () => setEditor(blank()) : null} actionLabel="Создать запрос" icon={Plus}/>
-    <ErrorBanner error={error} onClose={() => setError('')}/>
+    <PageHeader eyebrow="REQUEST FLOW" title="Запросы" description={workspace === 'requests' ? 'Короткий цикл товарных запросов.' : 'Подборки из аналитики и контроль отправки поставщикам.'} action={workspace === 'requests' && editable ? () => setEditor(blank()) : null} actionLabel="Создать запрос" icon={Plus}/>
 
-    <section className="metric-strip procurement-metrics">{summary.map(([key, value], index) => <button key={key} className={status === key ? 'active' : ''} onClick={() => setStatus(status === key ? 'all' : key)}>
-      <span className="metric-step">0{index + 1}</span><div><small>{requestStatuses[key]}</small><em>{index === 0 ? 'Ожидает ответа' : index === 1 ? 'Готово к расчёту' : 'Цикл завершён'}</em></div><b>{value}</b>
-    </button>)}</section>
+    <nav className="requests-workspace-tabs" aria-label="Рабочие реестры запросов">
+      <button type="button" className={workspace === 'requests' ? 'active' : ''} onClick={() => setWorkspace('requests')}><ClipboardList/> Товарные запросы</button>
+      <button type="button" className={workspace === 'supplier-search' ? 'active' : ''} onClick={() => { setEditor(null); setWorkspace('supplier-search') }}><Layers3/> Подборы поставщикам</button>
+    </nav>
 
-    <section className="register-panel procurement-register">
-      <div className="register-head"><div><small>КРАТКИЙ РЕЕСТР</small><h2>Товарные запросы</h2><p>{filtered.length} из {rows.length}</p></div><button className="secondary" onClick={exportRows}><Download/> Экспорт в Excel</button></div>
-      <div className="filters"><SearchBox value={query} onChange={setQuery} placeholder="Товар, агент или категория"/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(requestStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
-      {loading ? <div className="loading-state">Загрузка запросов…</div> : !filtered.length ? <EmptyState icon={ClipboardList} title="Запросы не найдены" text={rows.length ? 'Измените поиск или статус.' : 'Создайте первый короткий запрос.'} action={editable ? () => setEditor(blank()) : null} actionLabel="Создать запрос"/> : <>
-        <div className="data-table"><table><thead><tr><th>Дата</th><th>Агент</th><th>Категория</th><th>Наименование товара</th><th>Статус</th><th/></tr></thead><tbody>{filtered.map(row => <tr key={row.id}>
-          <td><button className="table-link" onClick={() => setEditor(normalize(row))}>{formatDate(row.request_sent_at)}</button><small>{row.request_number}</small></td>
-          <td><b>{row.agent_name}</b></td>
-          <td><span className="category-chip">{row.category}</span></td>
-          <td><b className="product-title">{row.product_name}</b></td>
-          <td><StatusPill value={row.status} labels={requestStatuses}/></td>
-          <td><div className="row-actions"><button title="Открыть" onClick={() => setEditor(normalize(row))}><Pencil/></button>{editable && <button title="Создать PI" onClick={() => onCreatePI(row)}><FilePlus2/></button>}{editable && <button className="danger" title="Удалить" onClick={() => remove(row)}><Trash2/></button>}</div></td>
-        </tr>)}</tbody></table></div>
-        <div className="mobile-cards">{filtered.map(row => <article key={row.id} onClick={() => setEditor(normalize(row))}><div><button>{formatDate(row.request_sent_at)}</button><StatusPill value={row.status} labels={requestStatuses}/></div><h3>{row.product_name}</h3><p>{row.agent_name}</p><dl><div><dt>Категория</dt><dd>{row.category}</dd></div><div><dt>Запрос</dt><dd>{row.request_number}</dd></div></dl></article>)}</div>
-      </>}
-    </section>
+    {workspace === 'requests' ? <>
+      <ErrorBanner error={error} onClose={() => setError('')}/>
 
-    {editor && <Drawer title={editor.id ? editor.product_name : 'Новый запрос'} subtitle={editor.id ? editor.request_number : 'SHORT REQUEST'} onClose={() => setEditor(null)} footer={<><span className="footer-note">Номер запроса создаётся автоматически</span>{editor.id && editable && <button className="danger-button" onClick={() => remove(editor)}><Trash2/> Удалить</button>}<BusyButton className="primary" busy={saving} onClick={save}>Сохранить</BusyButton></>}>
+      <section className="metric-strip procurement-metrics">{summary.map(([key, value], index) => <button key={key} className={status === key ? 'active' : ''} onClick={() => setStatus(status === key ? 'all' : key)}>
+        <span className="metric-step">0{index + 1}</span><div><small>{requestStatuses[key]}</small><em>{index === 0 ? 'Ожидает ответа' : index === 1 ? 'Готово к расчёту' : 'Цикл завершён'}</em></div><b>{value}</b>
+      </button>)}</section>
+
+      <section className="register-panel procurement-register">
+        <div className="register-head"><div><small>КРАТКИЙ РЕЕСТР</small><h2>Товарные запросы</h2><p>{filtered.length} из {rows.length}</p></div><button className="secondary" onClick={exportRows}><Download/> Экспорт в Excel</button></div>
+        <div className="filters"><SearchBox value={query} onChange={setQuery} placeholder="Товар, агент или категория"/><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{Object.entries(requestStatuses).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></div>
+        {loading ? <div className="loading-state">Загрузка запросов…</div> : !filtered.length ? <EmptyState icon={ClipboardList} title="Запросы не найдены" text={rows.length ? 'Измените поиск или статус.' : 'Создайте первый короткий запрос.'} action={editable ? () => setEditor(blank()) : null} actionLabel="Создать запрос"/> : <>
+          <div className="data-table"><table><thead><tr><th>Дата</th><th>Агент</th><th>Категория</th><th>Наименование товара</th><th>Статус</th><th/></tr></thead><tbody>{filtered.map(row => <tr key={row.id}>
+            <td><button className="table-link" onClick={() => setEditor(normalize(row))}>{formatDate(row.request_sent_at)}</button><small>{row.request_number}</small></td>
+            <td><b>{row.agent_name}</b></td>
+            <td><span className="category-chip">{row.category}</span></td>
+            <td><b className="product-title">{row.product_name}</b></td>
+            <td><StatusPill value={row.status} labels={requestStatuses}/></td>
+            <td><div className="row-actions"><button title="Открыть" onClick={() => setEditor(normalize(row))}><Pencil/></button>{editable && <button title="Создать PI" onClick={() => onCreatePI(row)}><FilePlus2/></button>}{editable && <button className="danger" title="Удалить" onClick={() => remove(row)}><Trash2/></button>}</div></td>
+          </tr>)}</tbody></table></div>
+          <div className="mobile-cards">{filtered.map(row => <article key={row.id} onClick={() => setEditor(normalize(row))}><div><button>{formatDate(row.request_sent_at)}</button><StatusPill value={row.status} labels={requestStatuses}/></div><h3>{row.product_name}</h3><p>{row.agent_name}</p><dl><div><dt>Категория</dt><dd>{row.category}</dd></div><div><dt>Запрос</dt><dd>{row.request_number}</dd></div></dl></article>)}</div>
+        </>}
+      </section>
+    </> : <SupplierSearchRegistry profile={profile} session={session} suppliers={agents}/>}
+
+    {workspace === 'requests' && editor && <Drawer title={editor.id ? editor.product_name : 'Новый запрос'} subtitle={editor.id ? editor.request_number : 'SHORT REQUEST'} onClose={() => setEditor(null)} footer={<><span className="footer-note">Номер запроса создаётся автоматически</span>{editor.id && editable && <button className="danger-button" onClick={() => remove(editor)}><Trash2/> Удалить</button>}<BusyButton className="primary" busy={saving} onClick={save}>Сохранить</BusyButton></>}>
       <FormSection index="01" title="Основная информация" text="Четыре поля — без лишних коммерческих данных.">
         <Field label="Дата *"><input type="date" value={editor.request_sent_at || ''} onChange={event => setEditor({ ...editor, request_sent_at: event.target.value })}/></Field>
         <Field label="Агент *"><input list="request-agent-options" value={editor.agent_name} onChange={event => setEditor({ ...editor, agent_name: event.target.value })} placeholder="Выберите или введите"/><datalist id="request-agent-options">{agents.map(item => <option key={item} value={item}/>)}</datalist></Field>
